@@ -44,7 +44,7 @@ jobs:
           intl: ^0.19.0
         EOF
 
-    - name: STEP 3 - Android Config Fix
+    - name: STEP 3 - Android Config Fix (SDK 35 Enforcement)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
@@ -55,6 +55,15 @@ jobs:
         echo "flutter.compileSdkVersion=35" >> android/local.properties
         echo "flutter.minSdkVersion=24" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
+        
+        # Примусове оновлення SDK в build.gradle для плагіна sqlite3_flutter_libs
+        if [ -f "android/app/build.gradle" ]; then
+          sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 35/g' android/app/build.gradle || true
+          sed -i -E 's/compileSdk [0-9]+/compileSdk 35/g' android/app/build.gradle || true
+          sed -i -E 's/targetSdkVersion [0-9]+/targetSdkVersion 35/g' android/app/build.gradle || true
+          sed -i -E 's/targetSdk [0-9]+/targetSdk 35/g' android/app/build.gradle || true
+          sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 24/g' android/app/build.gradle || true
+        fi
 
     - name: STEP 4 - Asset Generator & Background Permissions
       run: |
@@ -143,11 +152,9 @@ jobs:
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
                 
-                # Відновлено лікування бази даних Drift
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
                 
-                # Відновлено ліки від старих помилок Kimi (dropdown, easy_localization, supabase)
                 txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
                 txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
                 txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
@@ -325,7 +332,7 @@ jobs:
         fi
 
         cat << 'EOF' > fix_main_screen.py
-        import os
+        import os, re
         main_path = None
         for root, _, files in os.walk('lib'):
             if 'main_screen.dart' in files:
@@ -340,10 +347,11 @@ jobs:
                 txt = imports + txt
             
             if "body: Stack(" not in txt:
-                import re
                 body_match = re.search(r'body:\s*(.*?)(?=\n\s*bottomNavigationBar:|\n\s*floatingActionButton:)', txt, re.DOTALL)
                 if body_match:
-                    original_body = body_match.group(1)
+                    original_body = body_match.group(1).strip()
+                    if original_body.endswith(','):
+                        original_body = original_body[:-1]
                     
                     new_body = (
                         "body: Stack(\n"
@@ -393,9 +401,11 @@ jobs:
                         "            ),\n"
                         "          ),\n"
                         "        ],\n"
-                        "      )"
+                        "      ),"
                     )
-                    txt = txt.replace("body: " + original_body, new_body)
+                    
+                    # Точна і безпечна заміна блоку "body"
+                    txt = txt[:body_match.start()] + new_body + "\n      " + txt[body_match.end():]
             
             with open(main_path, 'w', encoding='utf-8') as f:
                 f.write(txt)
