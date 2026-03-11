@@ -38,7 +38,7 @@ jobs:
         if ! grep -q "just_audio_background:" pubspec.yaml; then
           sed -i '/dependencies:/a \  just_audio_background: ^0.0.1-beta.13' pubspec.yaml
         fi
-        cat << "EOF" >> pubspec.yaml
+        cat << 'EOF' >> pubspec.yaml
         dependency_overrides:
           web: ^0.5.0
           intl: ^0.19.0
@@ -102,15 +102,14 @@ jobs:
             </intent-filter> \
         </service>' $MANIFEST
         fi
-
-    - name: STEP 5 - Native UI Setup
+            - name: STEP 5 - Native UI Setup
       run: |
         cd ${{ env.FLUTTER_DIR }}
         RES_DIR="android/app/src/main/res"
         mkdir -p $RES_DIR/mipmap-xxhdpi $RES_DIR/values
         echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > $RES_DIR/mipmap-xxhdpi/ic_launcher.png
         cp $RES_DIR/mipmap-xxhdpi/ic_launcher.png $RES_DIR/mipmap-xxhdpi/ic_launcher_round.png
-        cat << "EOF" > $RES_DIR/values/styles.xml
+        cat << 'EOF' > $RES_DIR/values/styles.xml
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
             <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
@@ -125,7 +124,7 @@ jobs:
     - name: STEP 6 - Code Doctor (Safe Init & Bug Fixes)
       run: |
         cd ${{ env.FLUTTER_DIR }}
-        cat << "EOF" > fix_app.py
+        cat << 'EOF' > fix_app.py
         import os, re
 
         def drift_rep(m):
@@ -148,7 +147,9 @@ jobs:
                 txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
+                
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\(.*?\)\s*,?', '', txt, flags=re.DOTALL)
+                
                 txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
                 txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
                 txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
@@ -178,14 +179,14 @@ jobs:
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - Restore Radio, Gamification & Chat
+    - name: STEP 7 - Gamification, Radio & Chat UI
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p lib/features/gamification/presentation/screens
         mkdir -p lib/features/radio/presentation/screens
         mkdir -p lib/features/chat/presentation/screens
         
-        cat << "EOF" > lib/features/gamification/presentation/screens/daily_reward_screen.dart
+        cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
         import 'package:flutter/material.dart';
         import 'dart:math';
 
@@ -219,11 +220,7 @@ jobs:
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.card_giftcard,
-                      size: 120,
-                      color: _claimed ? Colors.grey : Colors.orange,
-                    ),
+                    Icon(Icons.card_giftcard, size: 120, color: _claimed ? Colors.grey : Colors.orange),
                     const SizedBox(height: 20),
                     Text(
                       _claimed ? 'Ви отримали $_reward монет!' : 'Ваш подарунок чекає!',
@@ -236,10 +233,7 @@ jobs:
                         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                       ),
                       onPressed: _claimed ? null : _claimReward,
-                      child: Text(
-                        _claimed ? 'Повернутися завтра' : 'Відкрити',
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                      child: Text(_claimed ? 'Повернутися завтра' : 'Відкрити', style: const TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
@@ -249,7 +243,7 @@ jobs:
         }
         EOF
 
-        cat << "EOF" > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
+        cat << 'EOF' > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
         import 'package:flutter/material.dart';
         import 'dart:math';
 
@@ -301,13 +295,10 @@ jobs:
                     RotationTransition(
                       turns: _ctrl,
                       child: Container(
-                        width: 300,
-                        height: 300,
+                        width: 300, height: 300,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: const SweepGradient(
-                            colors: [Colors.red, Colors.blue, Colors.green, Colors.yellow, Colors.red],
-                          ),
+                          gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Colors.green, Colors.yellow, Colors.red]),
                           border: Border.all(color: Colors.white, width: 5),
                         ),
                         child: const Center(
@@ -317,10 +308,7 @@ jobs:
                     ),
                     const SizedBox(height: 50),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6C63FF),
-                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20)),
                       onPressed: _spinning ? null : _spin,
                       child: const Text('ЗАПУСТИТИ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
@@ -332,7 +320,7 @@ jobs:
         }
         EOF
 
-        cat << "EOF" > lib/features/gamification/presentation/screens/achievements_screen.dart
+        cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
         import 'package:flutter/material.dart';
 
         class AchievementsScreen extends StatelessWidget {
@@ -374,7 +362,7 @@ jobs:
         }
         EOF
 
-        cat << "EOF" > lib/features/radio/presentation/screens/radio_screen.dart
+        cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
         import 'package:flutter/material.dart';
         import 'package:openwave/core/services/supabase_service.dart';
 
@@ -395,8 +383,7 @@ jobs:
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 200,
-                      height: 200,
+                      width: 200, height: 200,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const SweepGradient(colors: [Color(0xFF6C63FF), Colors.purple, Color(0xFF6C63FF)]),
@@ -429,13 +416,50 @@ jobs:
                         return const SizedBox.shrink();
                       },
                     )
-               - name: STEP 8 - Core UI, AUDIO URL FIX & Auth Screen
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF
+        
+        cat << 'EOF' > lib/features/chat/presentation/screens/chat_list_screen.dart
+        import 'package:flutter/material.dart';
+
+        class ChatListScreen extends StatelessWidget {
+          const ChatListScreen({super.key});
+
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Повідомлення', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ListTile(
+                    leading: const CircleAvatar(backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.support_agent, color: Colors.white)),
+                    title: const Text('Технічна підтримка / Адмін', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Привіт! Чим можемо допомогти?', style: TextStyle(color: Colors.grey)),
+                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Чат в розробці...'))),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        EOF
+            - name: STEP 8 - Core UI, Audio & Auth
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
-        # --- 1. NEW AUTH SCREEN (Login / Register) ---
         mkdir -p lib/features/auth/presentation/screens
-        cat << "EOF" > lib/features/auth/presentation/screens/simple_auth_screen.dart
+        cat << 'EOF' > lib/features/auth/presentation/screens/simple_auth_screen.dart
         import 'package:flutter/material.dart';
         import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -513,9 +537,8 @@ jobs:
         }
         EOF
 
-        # --- 2. AUDIO SERVICE WITH URL FIX ---
         mkdir -p lib/core/services
-        cat << "EOF" > lib/core/services/simple_audio_service.dart
+        cat << 'EOF' > lib/core/services/simple_audio_service.dart
         import 'package:flutter/foundation.dart';
         import 'package:just_audio/just_audio.dart';
         import 'package:just_audio_background/just_audio_background.dart';
@@ -538,7 +561,6 @@ jobs:
               if (url.isEmpty) { try { url = (track as dynamic).filePath ?? ''; } catch (e) {} }
               
               if (url.isNotEmpty) {
-                // FIXED SOUND: Convert relative path to full public URL if needed
                 if (!url.startsWith('http')) {
                   url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
                 }
@@ -571,9 +593,8 @@ jobs:
         }
         EOF
 
-        # --- 3. FULL SCREEN PLAYER ---
         mkdir -p lib/features/player/presentation/screens
-        cat << "EOF" > lib/features/player/presentation/screens/full_player_screen.dart
+        cat << 'EOF' > lib/features/player/presentation/screens/full_player_screen.dart
         import 'package:flutter/material.dart';
         import 'package:openwave/core/models/track_model.dart';
         import 'package:openwave/core/services/simple_audio_service.dart';
@@ -691,10 +712,9 @@ jobs:
         }
         EOF
 
-        # --- 4. TABS & MAIN SCREEN REWRITE ---
         HOME_FILE=$(find lib -name "home_tab.dart" -type f | head -n 1)
         if [ -z "$HOME_FILE" ]; then HOME_FILE="lib/features/home/presentation/screens/home_tab.dart"; mkdir -p $(dirname "$HOME_FILE"); fi
-        cat << "EOF" > "$HOME_FILE"
+        cat << 'EOF' > "$HOME_FILE"
         import 'package:flutter/material.dart';
         import 'package:openwave/core/services/supabase_service.dart';
         import 'package:openwave/core/models/track_model.dart';
@@ -762,7 +782,7 @@ jobs:
 
         LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
         if [ -z "$LIB_FILE" ]; then LIB_FILE="lib/features/home/presentation/screens/library_tab.dart"; mkdir -p $(dirname "$LIB_FILE"); fi
-        cat << "EOF" > "$LIB_FILE"
+        cat << 'EOF' > "$LIB_FILE"
         import 'package:flutter/material.dart';
         import 'package:openwave/core/services/supabase_service.dart';
         import 'package:openwave/core/models/playlist_model.dart';
@@ -828,10 +848,10 @@ jobs:
                         if (index == 0) return Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                                             const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                            const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                             Row(children: [
                               IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF6C63FF)), onPressed: _loadPlaylists),
-                              IconButton(icon: const Icon(Icons.add, color: Color(0xFF6C63FF)), onPressed: _showCreateDialog),
+                                                            IconButton(icon: const Icon(Icons.add, color: Color(0xFF6C63FF)), onPressed: _showCreateDialog),
                             ])
                           ],
                         );
@@ -857,7 +877,7 @@ jobs:
 
         PROF_FILE=$(find lib -name "profile_tab.dart" -type f | head -n 1)
         if [ -z "$PROF_FILE" ]; then PROF_FILE="lib/features/home/presentation/screens/profile_tab.dart"; mkdir -p $(dirname "$PROF_FILE"); fi
-        cat << "EOF" > "$PROF_FILE"
+        cat << 'EOF' > "$PROF_FILE"
         import 'package:flutter/material.dart';
         import 'package:supabase_flutter/supabase_flutter.dart';
         import 'package:openwave/features/gamification/presentation/screens/daily_reward_screen.dart';
@@ -901,7 +921,6 @@ jobs:
                   _buildNavCard(context, Icons.radio, 'OpenWave Радіо', Colors.blue, const RadioScreen()),
                   _buildNavCard(context, Icons.chat, 'Повідомлення (Підтримка)', Colors.teal, const ChatListScreen()),
                   const Divider(color: Colors.grey, height: 40),
-                  // ADMIN BUTTON LOGIC - ТІЛЬКИ ДЛЯ АДМІНІВ
                   FutureBuilder<bool>(
                     future: SupabaseService().isAdmin(),
                     builder: (context, snapshot) {
@@ -940,7 +959,7 @@ jobs:
 
         MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
         if [ -z "$MAIN_FILE" ]; then MAIN_FILE="lib/features/home/presentation/screens/main_screen.dart"; mkdir -p $(dirname "$MAIN_FILE"); fi
-        cat << "EOF" > "$MAIN_FILE"
+        cat << 'EOF' > "$MAIN_FILE"
         import 'package:flutter/material.dart';
         import 'package:openwave/core/services/simple_audio_service.dart';
         import 'package:openwave/core/models/track_model.dart';
@@ -1051,13 +1070,13 @@ jobs:
         sed -i "s|// REPLACE_LIB_IMPORT|import 'package:openwave/$LIB_PATH';|g" "$MAIN_FILE"
         sed -i "s|// REPLACE_PROF_IMPORT|import 'package:openwave/$PROF_PATH';|g" "$MAIN_FILE"
 
-    - name: STEP 9 - Core Init with Working Supabase & Auth
+    - name: STEP 9 - The Root Setup
       run: |
         cd ${{ env.FLUTTER_DIR }}
         MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
         MAIN_PATH=$(echo "$MAIN_FILE" | sed 's|lib/||')
         
-        cat << "EOF" > lib/main.dart
+        cat << 'EOF' > lib/main.dart
         import 'package:flutter/material.dart';
         import 'package:just_audio_background/just_audio_background.dart';
         import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1120,9 +1139,9 @@ jobs:
                 builder: (context, snapshot) {
                   final session = snapshot.data?.session;
                   if (session != null) {
-                    return const MainScreen(); // КОРИСТУВАЧ АВТОРИЗОВАНИЙ
+                    return const MainScreen();
                   }
-                  return const SimpleAuthScreen(); // ПОТРІБНА АВТОРИЗАЦІЯ
+                  return const SimpleAuthScreen();
                 },
               ),
             );
