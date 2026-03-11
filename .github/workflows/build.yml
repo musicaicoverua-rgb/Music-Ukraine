@@ -35,7 +35,8 @@ jobs:
             web: ^0.5.0
             intl: ^0.19.0
           EOF
-                - name: STEP 2 - Android Config & Fixes
+          
+      - name: STEP 2 - Android Config & Fixes
         run: |
           DIR="${{ env.FLUTTER_DIR }}"
           mkdir -p "$DIR/android" "$DIR/assets/images" "$DIR/assets/animations" "$DIR/assets/icons"
@@ -80,8 +81,9 @@ jobs:
                   if orig != txt:
                       with open(p, 'w') as file: file.write(txt)
           EOF
-          python3 "$DIR/fix_app.py" "$DIR"continue-on-error:
-                - name: STEP 3 - Gamification & Radio Screens
+          python3 "$DIR/fix_app.py" "$DIR"continue-on-error:    
+          
+      - name: STEP 3 - Gamification & Radio Screens
         run: |
           DIR="${{ env.FLUTTER_DIR }}"
           mkdir -p "$DIR/lib/features/gamification/presentation/screens" "$DIR/lib/features/radio/presentation/screens" "$DIR/lib/features/chat/presentation/screens"
@@ -296,7 +298,7 @@ jobs:
             }
           }
           EOF
-                - name: STEP 4 - Audio, Player & Auth Screens
+      - name: STEP 4 - Audio, Player & Auth Screens
         run: |
           DIR="${{ env.FLUTTER_DIR }}"
           mkdir -p "$DIR/lib/core/services" "$DIR/lib/features/player/presentation/screens" "$DIR/lib/features/auth/presentation/screens"
@@ -484,7 +486,7 @@ jobs:
             }
           }
           EOF
-                - name: STEP 5 - Tabs, Main Screen & Build
+      - name: STEP 5 - Tabs, Main Screen & Build
         run: |
           DIR="${{ env.FLUTTER_DIR }}"
           mkdir -p "$DIR/lib/features/home/presentation/screens"
