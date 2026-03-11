@@ -89,138 +89,180 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Fix All Logic)
+    - name: STEP 6 - Code Doctor (Fix Logic & Inject UI)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
         import os, re
 
-        WRAPPER_TEMPLATE = """
-        class GlobalAppWrapper extends StatelessWidget {
-          final Widget child;
-          const GlobalAppWrapper({super.key, required this.child});
-          @override
-          Widget build(BuildContext context) {
-            return MultiBlocProvider(
-              providers: [
-        __PROVIDERS__
-              ],
-              child: child,
-            );
-          }
-        }
-        """
-
-        SHIELD_TEMPLATE = """
-          ErrorWidget.builder = (FlutterErrorDetails details) {
-            return MaterialApp(
-              home: Scaffold(
-                backgroundColor: const Color(0xFFFFFFFF),
-                body: SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),
-                      style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          };
-        """
-
-        def drift_rep(m):
-            t, c = m.group(1), m.group(2)
-            if 'Companion' in c:
-                id_m = re.search(r'id:\s*Value\((.*?)\)', c)
-                if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
-            return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
-
-        for root, _, files in os.walk('lib'):
-            for f in files:
-                if not f.endswith('.dart'): continue
-                p = os.path.join(root, f)
-                with open(p, 'r', encoding='utf-8') as file:
-                    txt = file.read()
-                
-                orig = txt
-                
-                # 1. Database fixes
-                txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
-                txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
-                txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
-                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
-                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
-                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
-                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
-                
-                # 2. RESTORED FIXES FOR DART SYNTAX
-                txt = re.sub(r'enabled:\s*!_isUploading,', '// enabled: !_isUploading,', txt)
-                txt = re.sub(r'args:\s*\{', 'namedArgs: {', txt)
-                txt = re.sub(r'currentTrack:\s*\(\)\s*=>\s*event\.track', 'currentTrack: event.track', txt)
-                txt = re.sub(r'currentTrack:\s*\(\)\s*=>\s*null', 'currentTrack: null', txt)
-                
-                # 3. FIX ADMIN PARSING BUG & FORCE ADMIN
-                txt = txt.replace("json['isAdmin']", "json['is_admin']")
-                txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
-                txt = txt.replace("json['admin']", "json['is_admin']")
-                txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
-                
-                if orig != txt:
-                    with open(p, 'w', encoding='utf-8') as file:
-                        file.write(txt)
-
-        for root, _, files in os.walk('android/app/src/main'):
-            for f in files:
-                if f in ['MainActivity.kt', 'MainActivity.java']:
+        def fix_all():
+            for root, _, files in os.walk('lib'):
+                for f in files:
+                    if not f.endswith('.dart'): continue
                     p = os.path.join(root, f)
                     with open(p, 'r', encoding='utf-8') as file:
                         txt = file.read()
-                    txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
-                    txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
-                    txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
-                    txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
-                    with open(p, 'w', encoding='utf-8') as file:
-                        file.write(txt)
+                    
+                    orig = txt
+                    
+                    def drift_rep(m):
+                        t, c = m.group(1), m.group(2)
+                        if 'Companion' in c:
+                            id_m = re.search(r'id:\s*Value\((.*?)\)', c)
+                            if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
+                        return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
+                    
+                    txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
+                    txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
+                    txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
+                    txt = txt.replace("query = query.eq('genre', genre);", "// eq")
+                    txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
+                    txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
+                    txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
+                    
+                    # 1. THE MISSING SYNTAX FIXES
+                    txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
+                    txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
+                    txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
+                    txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
+                    txt = txt.replace("currentTrack: () => null", "currentTrack: null")
+                    
+                    # 2. FORCE ADMIN RIGHTS
+                    txt = txt.replace("json['isAdmin']", "json['is_admin']")
+                    txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
+                    txt = txt.replace("json['admin']", "json['is_admin']")
+                    txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
+                    
+                    # 3. INJECT PLAYLIST CREATOR INTO MAIN SCREEN
+                    if f == 'main_screen.dart':
+                        if 'floatingActionButton' not in txt:
+                            txt = "import '../../../../core/services/supabase_service.dart';\n" + txt
+                            fab = """
+      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(
+        backgroundColor: AppTheme.primaryColor,
+        child: const Icon(Icons.playlist_add, color: Colors.white),
+        onPressed: () {
+          final ctrl = TextEditingController();
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF1E1E2C),
+              title: const Text('Create Playlist', style: TextStyle(color: Colors.white)),
+              content: TextField(
+                controller: ctrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(hintText: 'Playlist Name', hintStyle: TextStyle(color: Colors.grey)),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                  onPressed: () async {
+                    if (ctrl.text.isNotEmpty) {
+                      try {
+                        await SupabaseService().createPlaylist(name: ctrl.text);
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist created!'), backgroundColor: Colors.green));
+                      } catch (e) {
+                        Navigator.pop(ctx);
+                      }
+                    }
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            ),
+          );
+        },
+      ) : null,
+      bottomNavigationBar:"""
+                            txt = txt.replace("bottomNavigationBar:", fab)
+                    
+                    if orig != txt:
+                        with open(p, 'w', encoding='utf-8') as file:
+                            file.write(txt)
 
-        main_p = 'lib/main.dart'
-        if os.path.exists(main_p):
-            with open(main_p, 'r', encoding='utf-8') as f:
-                mtxt = f.read()
-                
-            if 'GlobalAppWrapper' not in mtxt:
-                blocs = set()
-                imports = set()
-                for root, _, files in os.walk('lib'):
-                    for f in files:
-                        if not f.endswith('.dart'): continue
+            # 4. FIX ANDROID BACKGROUND SERVICE
+            for root, _, files in os.walk('android/app/src/main'):
+                for f in files:
+                    if f in ['MainActivity.kt', 'MainActivity.java']:
                         p = os.path.join(root, f)
-                        with open(p, 'r', encoding='utf-8') as f2:
-                            for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
-                                blocs.add(b)
-                                imports.add(f"import 'package:openwave/{p.replace(os.sep, '/').replace('lib/', '')}';")
-                
-                istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
-                for i in imports:
-                    if i not in mtxt: istr += i + "\n"
-                mtxt = istr + mtxt
-                
-                # Build providers string
-                pstr = ""
-                for b in blocs:
-                    pstr += f"        BlocProvider<{b}>(create: (_) => getIt<{b}>()),\n"
-                
-                # Inject Wrapper
-                wrapper_code = WRAPPER_TEMPLATE.replace("__PROVIDERS__", pstr)
-                mtxt += "\n" + wrapper_code
-                mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
-                
-                # Inject Shield
-                mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + SHIELD_TEMPLATE)
-                
-                with open(main_p, 'w', encoding='utf-8') as f:
-                    f.write(mtxt)
+                        with open(p, 'r', encoding='utf-8') as file:
+                            txt = file.read()
+                        txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
+                        txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
+                        txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
+                        txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
+                        with open(p, 'w', encoding='utf-8') as file:
+                            file.write(txt)
+            
+            # 5. INJECT BLOC PROVIDERS SAFELY
+            main_p = 'lib/main.dart'
+            if os.path.exists(main_p):
+                with open(main_p, 'r', encoding='utf-8') as f:
+                    mtxt = f.read()
+                    
+                if 'GlobalAppWrapper' not in mtxt:
+                    blocs = set()
+                    imports = set()
+                    for root, _, files in os.walk('lib'):
+                        for f in files:
+                            if not f.endswith('.dart'): continue
+                            p = os.path.join(root, f)
+                            with open(p, 'r', encoding='utf-8') as f2:
+                                for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
+                                    blocs.add(b)
+                                    imports.add("import 'package:openwave/" + p.replace(os.sep, '/').replace('lib/', '') + "';")
+                    
+                    istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
+                    for i in imports:
+                        if i not in mtxt: istr += i + "\n"
+                    mtxt = istr + mtxt
+                    
+                    pstr = ",\n                ".join(["BlocProvider<" + b + ">(create: (_) => getIt<" + b + ">())" for b in blocs])
+                    
+                    wrapper = (
+                        "\nclass GlobalAppWrapper extends StatelessWidget {\n"
+                        "  final Widget child;\n"
+                        "  const GlobalAppWrapper({super.key, required this.child});\n"
+                        "  @override\n"
+                        "  Widget build(BuildContext context) {\n"
+                        "    return MultiBlocProvider(\n"
+                        "      providers: [\n"
+                        "        " + pstr + "\n"
+                        "      ],\n"
+                        "      child: child,\n"
+                        "    );\n"
+                        "  }\n"
+                        "}\n"
+                    )
+                    mtxt += "\n" + wrapper
+                    mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
+                    
+                    shield = (
+                        "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
+                        "    return MaterialApp(\n"
+                        "      home: Scaffold(\n"
+                        "        backgroundColor: const Color(0xFFFFFFFF),\n"
+                        "        body: SafeArea(\n"
+                        "          child: SingleChildScrollView(\n"
+                        "            padding: const EdgeInsets.all(16),\n"
+                        "            child: Text(\n"
+                        "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
+                        "              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),\n"
+                        "            ),\n"
+                        "          ),\n"
+                        "        ),\n"
+                        "      ),\n"
+                        "    );\n"
+                        "  };\n"
+                    )
+                    mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
+                    
+                    with open(main_p, 'w', encoding='utf-8') as f:
+                        f.write(mtxt)
+
+        fix_all()
         EOF
         python3 fix_app.py
 
