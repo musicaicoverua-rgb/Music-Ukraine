@@ -29,7 +29,7 @@ jobs:
         FLUTTER_DIR=$(find . -name "pubspec.yaml" -exec dirname {} \; | head -n 1)
         echo "FLUTTER_DIR=$FLUTTER_DIR" >> $GITHUB_ENV
 
-    - name: STEP 2 - The Smart Dependency Override
+    - name: STEP 2 - Dependencies Fix
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' >> pubspec.yaml
@@ -38,7 +38,7 @@ jobs:
           intl: ^0.19.0
         EOF
 
-    - name: STEP 3 - Fix Native Android Config
+    - name: STEP 3 - Android Config Fix
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
@@ -50,7 +50,7 @@ jobs:
         echo "flutter.minSdkVersion=24" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
 
-    - name: STEP 4 - Asset Generator & Background Permissions
+    - name: STEP 4 - Asset & Permission Generator
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p assets/images assets/animations assets/icons assets/fonts assets/translations assets/langs
@@ -70,7 +70,7 @@ jobs:
           fi
         done
 
-    - name: STEP 5 - Inject Missing Android Native Resources
+    - name: STEP 5 - Android Native Resources
       run: |
         cd ${{ env.FLUTTER_DIR }}
         RES_DIR="android/app/src/main/res"
@@ -89,7 +89,7 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Admin Buttons & Navigation)
+    - name: STEP 6 - Code Doctor (Admin Logic & Navigation)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
@@ -102,6 +102,7 @@ jobs:
                 if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
             return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
 
+        # --- Part 1: Syntax Fixes ---
         for root, _, files in os.walk('lib'):
             for f in files:
                 if not f.endswith('.dart'): continue
@@ -109,95 +110,75 @@ jobs:
                 with open(p, 'r', encoding='utf-8') as file:
                     txt = file.read()
                 orig = txt
-                
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
                 txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
-                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
-                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
-                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
-                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
-                
-                txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
-                txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
-                txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
-                txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
-                txt = txt.replace("currentTrack: () => null", "currentTrack: null")
-                
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
-                txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
-                txt = txt.replace("json['admin']", "json['is_admin']")
                 txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
-                
-                if f == 'main_screen.dart':
-                    if 'floatingActionButton' not in txt:
-                        imports = (
-                            "import 'package:openwave/core/services/supabase_service.dart';\n"
-                            "import 'package:openwave/features/admin/presentation/screens/admin_screen.dart';\n"
-                        )
-                        txt = imports + txt
-                        
-                        fab = (
-                            "      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(\n"
-                            "        backgroundColor: AppTheme.primaryColor,\n"
-                            "        child: const Icon(Icons.playlist_add, color: Colors.white),\n"
-                            "        onPressed: () {\n"
-                            "          final ctrl = TextEditingController();\n"
-                            "          showDialog(\n"
-                            "            context: context,\n"
-                            "            builder: (ctx) => AlertDialog(\n"
-                            "              backgroundColor: const Color(0xFF1E1E2C),\n"
-                            "              title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),\n"
-                            "              content: TextField(\n"
-                            "                controller: ctrl,\n"
-                            "                style: const TextStyle(color: Colors.white),\n"
-                            "                decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey)),\n"
-                            "              ),\n"
-                            "              actions: [\n"
-                            "                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),\n"
-                            "                ElevatedButton(\n"
-                            "                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),\n"
-                            "                  onPressed: () async {\n"
-                            "                    if (ctrl.text.isNotEmpty) {\n"
-                            "                      try {\n"
-                            "                        await SupabaseService().createPlaylist(name: ctrl.text);\n"
-                            "                        if (context.mounted) {\n"
-                            "                          Navigator.pop(ctx);\n"
-                            "                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Плейлист створено!'), backgroundColor: Colors.green));\n"
-                            "                        }\n"
-                            "                      } catch (e) {\n"
-                            "                        if (context.mounted) Navigator.pop(ctx);\n"
-                            "                      }\n"
-                            "                    }\n"
-                            "                  },\n"
-                            "                  child: const Text('Створити'),\n"
-                            "                ),\n"
-                            "              ],\n"
-                            "            ),\n"
-                            "          );\n"
-                            "        },\n"
-                            "      ) : FutureBuilder<bool>(\n"
-                            "        future: SupabaseService().isAdmin(),\n"
-                            "        builder: (context, snapshot) {\n"
-                            "          if (snapshot.data == true && _currentIndex == 0) {\n"
-                            "            return FloatingActionButton.extended(\n"
-                            "              backgroundColor: Colors.green,\n"
-                            "              icon: const Icon(Icons.cloud_upload, color: Colors.white),\n"
-                            "              label: const Text('Завантажити трек', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),\n"
-                            "              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),\n"
-                            "            );\n"
-                            "          }\n"
-                            "          return const SizedBox.shrink();\n"
-                            "        },\n"
-                            "      ),\n"
-                            "      bottomNavigationBar:"
-                        )
-                        txt = txt.replace("bottomNavigationBar:", fab)
-
                 if orig != txt:
                     with open(p, 'w', encoding='utf-8') as file:
                         file.write(txt)
 
+        # --- Part 2: Connect Navigation in ProfileTab ---
+        screen_map = {
+            "RadioScreen": None, "ChatScreen": None, "AnalyticsScreen": None,
+            "AdminScreen": None, "SettingsScreen": None, "DailyRewardScreen": None,
+            "SpinWheelScreen": None, "AchievementsScreen": None
+        }
+        for root, _, files in os.walk('lib'):
+            for f in files:
+                if f.endswith('.dart'):
+                    content = open(os.path.join(root, f), 'r', encoding='utf-8').read()
+                    for s in screen_map.keys():
+                        if f"class {s} extends" in content:
+                            screen_map[s] = "package:openwave/" + os.path.join(root, f).replace('lib/', '').replace('\\', '/')
+
+        profile_tab = next((os.path.join(r, f) for r, _, fs in os.walk('lib') for f in fs if f == 'profile_tab.dart'), None)
+        if profile_tab:
+            with open(profile_tab, 'r', encoding='utf-8') as f:
+                txt = f.read()
+            imports = ""
+            for s, path in screen_map.items():
+                if path and path not in txt: imports += f"import '{path}';\n"
+            txt = imports + txt
+            txt = txt.replace("title: 'admin'.tr(),", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,")
+            for s in screen_map.keys():
+                path_str = s.replace('Screen', '').lower()
+                if path_str == 'dailyreward': path_str = 'daily-reward'
+                elif path_str == 'spinwheel': path_str = 'spin-wheel'
+                txt = txt.replace(f"context.push('/{path_str}')", f"Navigator.push(context, MaterialPageRoute(builder: (_) => const {s}()))")
+            with open(profile_tab, 'w', encoding='utf-8') as f:
+                f.write(txt)
+
+        # --- Part 3: Admin FAB on MainScreen ---
+        main_screen = next((os.path.join(r, f) for r, _, fs in os.walk('lib') for f in fs if f == 'main_screen.dart'), None)
+        if main_screen:
+            with open(main_screen, 'r', encoding='utf-8') as f:
+                txt = f.read()
+            if 'floatingActionButton' not in txt:
+                imports = "import 'package:openwave/core/services/supabase_service.dart';\nimport 'package:openwave/features/admin/presentation/screens/admin_screen.dart';\n"
+                txt = imports + txt
+                fab = """
+      floatingActionButton: _currentIndex == 0 ? FutureBuilder<bool>(
+        future: SupabaseService().isAdmin(),
+        builder: (context, snapshot) {
+          if (snapshot.data == true) {
+            return FloatingActionButton.extended(
+              backgroundColor: Colors.green,
+              icon: const Icon(Icons.cloud_upload, color: Colors.white),
+              label: const Text('Завантажити трек', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ) : null,
+      bottomNavigationBar:"""
+                txt = txt.replace("bottomNavigationBar:", fab)
+                with open(main_screen, 'w', encoding='utf-8') as f:
+                    f.write(txt)
+
+        # --- Part 4: Android Audio Service Fix ---
         for root, _, files in os.walk('android/app/src/main'):
             for f in files:
                 if f in ['MainActivity.kt', 'MainActivity.java']:
@@ -210,125 +191,16 @@ jobs:
                     txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
                     with open(p, 'w', encoding='utf-8') as file:
                         file.write(txt)
-
-        main_p = 'lib/main.dart'
-        if os.path.exists(main_p):
-            with open(main_p, 'r', encoding='utf-8') as f:
-                mtxt = f.read()
-            if 'GlobalAppWrapper' not in mtxt:
-                blocs = set()
-                imports = set()
-                for root, _, files in os.walk('lib'):
-                    for f in files:
-                        if not f.endswith('.dart'): continue
-                        p = os.path.join(root, f)
-                        with open(p, 'r', encoding='utf-8') as f2:
-                            for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
-                                blocs.add(b)
-                                imports.add("import 'package:openwave/" + p.replace(os.sep, '/').replace('lib/', '') + "';\n")
-                istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
-                for i in imports:
-                    if i not in mtxt: istr += i
-                mtxt = istr + mtxt
-                pstr = ",\n        ".join(["BlocProvider<" + b + ">(create: (_) => getIt<" + b + ">())" for b in blocs])
-                wrapper = (
-                    "\nclass GlobalAppWrapper extends StatelessWidget {\n"
-                    "  final Widget child;\n"
-                    "  const GlobalAppWrapper({super.key, required this.child});\n"
-                    "  @override\n"
-                    "  Widget build(BuildContext context) {\n"
-                    "    return MultiBlocProvider(\n"
-                    "      providers: [\n"
-                    "        " + pstr + "\n"
-                    "      ],\n"
-                    "      child: child,\n"
-                    "    );\n"
-                    "  }\n"
-                    "}\n"
-                )
-                mtxt += "\n" + wrapper
-                mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
-                shield = (
-                    "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
-                    "    return MaterialApp(\n"
-                    "      home: Scaffold(\n"
-                    "        backgroundColor: const Color(0xFFFFFFFF),\n"
-                    "        body: SafeArea(\n"
-                    "          child: SingleChildScrollView(\n"
-                    "            padding: const EdgeInsets.all(16),\n"
-                    "            child: Text(\n"
-                    "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
-                    "              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),\n"
-                    "            ),\n"
-                    "          ),\n"
-                    "        ),\n"
-                    "      ),\n"
-                    "    );\n"
-                    "  };\n"
-                )
-                mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
-                with open(main_p, 'w', encoding='utf-8') as f:
-                    f.write(mtxt)
-
-        screen_files = {
-            "RadioScreen": None,
-            "ChatScreen": None,
-            "AnalyticsScreen": None,
-            "AdminScreen": None,
-            "SettingsScreen": None,
-            "DailyRewardScreen": None,
-            "SpinWheelScreen": None,
-            "AchievementsScreen": None
-        }
-        for root, _, files in os.walk('lib'):
-            for f in files:
-                if not f.endswith('.dart'): continue
-                path = os.path.join(root, f).replace('\\', '/')
-                content = open(path, 'r', encoding='utf-8').read()
-                for screen in screen_files.keys():
-                    if f"class {screen} extends" in content:
-                        screen_files[screen] = "package:openwave/" + path.replace("lib/", "")
-
-        for root, _, files in os.walk('lib'):
-            if 'profile_tab.dart' in files:
-                profile_path = os.path.join(root, 'profile_tab.dart')
-                with open(profile_path, 'r', encoding='utf-8') as f:
-                    p_content = f.read()
-                
-                imports = ""
-                for screen, path in screen_files.items():
-                    if path and path not in p_content:
-                        imports += f"import '{path}';\n"
-                
-                p_content = imports + p_content
-                
-                p_content = p_content.replace("title: 'admin'.tr(),", "title: 'Завантажити трек (Адмін)',")
-                p_content = p_content.replace("icon: Icons.admin_panel_settings,", "icon: Icons.cloud_upload, textColor: Colors.green,")
-                
-                p_content = p_content.replace("context.push('/radio')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const RadioScreen()))")
-                p_content = p_content.replace("context.push('/chat')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen()))")
-                p_content = p_content.replace("context.push('/analytics')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))")
-                p_content = p_content.replace("context.push('/admin')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))")
-                p_content = p_content.replace("context.push('/settings')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))")
-                p_content = p_content.replace("context.push('/daily-reward')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyRewardScreen()))")
-                p_content = p_content.replace("context.push('/spin-wheel')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinWheelScreen()))")
-                p_content = p_content.replace("context.push('/achievements')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen()))")
-                p_content = p_content.replace("context.push('/edit-profile')", "ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'), backgroundColor: Colors.orange))")
-                
-                with open(profile_path, 'w', encoding='utf-8') as f:
-                    f.write(p_content)
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - Inject Reactive Library Screen
+    - name: STEP 7 - Reactive Library Tab Implementation
       run: |
         cd ${{ env.FLUTTER_DIR }}
         LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
         cat << 'EOF' > "$LIB_FILE"
         import 'package:flutter/material.dart';
         import 'package:easy_localization/easy_localization.dart';
-        import 'package:go_router/go_router.dart';
-
         import 'package:openwave/core/theme/app_theme.dart';
         import 'package:openwave/core/services/supabase_service.dart';
         import 'package:openwave/core/models/playlist_model.dart';
@@ -366,47 +238,32 @@ jobs:
             }
           }
 
-          void _showComingSoon() {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Ця функція ще в розробці...'),
-                duration: Duration(seconds: 2),
-                backgroundColor: AppTheme.primaryColor
-              ),
-            );
-          }
-
           void _showCreateDialog() {
             final ctrl = TextEditingController();
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: const Color(0xFF1E1E2C),
-                title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),
+                title: Text('create_playlist'.tr(), style: const TextStyle(color: Colors.white)),
                 content: TextField(
                   controller: ctrl,
+                  autofocus: true,
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey)),
+                  decoration: InputDecoration(hintText: 'playlist_name'.tr(), hintStyle: const TextStyle(color: Colors.grey)),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text('cancel'.tr())),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
                     onPressed: () async {
                       if (ctrl.text.isNotEmpty) {
-                        try {
-                          await _supabase.createPlaylist(name: ctrl.text);
-                          if (mounted) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Плейлист створено!'), backgroundColor: Colors.green));
-                            _loadPlaylists();
-                          }
-                        } catch (e) {
-                          if (mounted) Navigator.pop(ctx);
+                        await _supabase.createPlaylist(name: ctrl.text);
+                        if (mounted) {
+                          Navigator.pop(ctx);
+                          _loadPlaylists();
                         }
                       }
                     },
-                    child: const Text('Створити'),
+                    child: Text('create'.tr()),
                   ),
                 ],
               ),
@@ -419,61 +276,37 @@ jobs:
               slivers: [
                 SliverAppBar(
                   floating: true,
-                  title: Text('library'.tr(), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  actions: [IconButton(icon: const Icon(Icons.search), onPressed: _showComingSoon)],
+                  title: Text('library'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _loadPlaylists)],
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _buildLibraryItem(context, icon: Icons.favorite, iconColor: AppTheme.accentColor, title: 'liked_songs'.tr(), subtitle: 'Натисніть щоб відкрити', onTap: _showComingSoon),
+                      _buildItem(Icons.favorite, AppTheme.accentColor, 'liked_songs'.tr(), '0 tracks'),
                       const SizedBox(height: 12),
-                      _buildLibraryItem(context, icon: Icons.history, iconColor: AppTheme.primaryColor, title: 'recently_played'.tr(), subtitle: 'Натисніть щоб відкрити', onTap: _showComingSoon),
+                      _buildItem(Icons.history, AppTheme.primaryColor, 'recently_played'.tr(), '0 tracks'),
                       const SizedBox(height: 12),
-                      _buildLibraryItem(context, icon: Icons.download_done, iconColor: AppTheme.secondaryColor, title: 'offline_tracks'.tr(), subtitle: 'Натисніть щоб відкрити', onTap: _showComingSoon),
+                      _buildItem(Icons.download_done, AppTheme.secondaryColor, 'offline_tracks'.tr(), '0 tracks'),
                       const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('playlists'.tr(), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          Row(
-                            children: [
-                              IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
-                              IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
-                            ]
-                          )
+                          Text('playlists'.tr(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                          IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
                         ],
                       ),
                       const SizedBox(height: 16),
                       if (_isLoading)
-                        const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator(color: AppTheme.primaryColor)))
+                        const Center(child: CircularProgressIndicator())
                       else if (_playlists.isEmpty)
-                        Center(
-                          child: Column(
-                            children: [
-                              Icon(Icons.playlist_play, size: 64, color: AppTheme.mutedText.withOpacity(0.5)),
-                              const SizedBox(height: 16),
-                              Text('Немає плейлистів', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppTheme.mutedText)),
-                              const SizedBox(height: 8),
-                              TextButton(onPressed: _showCreateDialog, child: Text('create_playlist'.tr(), style: const TextStyle(color: AppTheme.primaryColor))),
-                            ],
-                          ),
-                        )
+                        Center(child: TextButton(onPressed: _showCreateDialog, child: Text('create_first_playlist'.tr())))
                       else
-                        ..._playlists.map((p) => Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            leading: Container(
-                              width: 48, height: 48,
-                              decoration: BoxDecoration(color: AppTheme.primaryColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                              child: const Icon(Icons.music_note, color: AppTheme.primaryColor),
-                            ),
-                            title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                            subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                            onTap: _showComingSoon,
-                          ),
+                        ..._playlists.map((p) => ListTile(
+                          leading: const Icon(Icons.playlist_play, color: AppTheme.primaryColor),
+                          title: Text(p.name, style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('${p.tracks.length} tracks', style: const TextStyle(color: Colors.grey)),
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
                         )),
                     ]),
                   ),
@@ -482,53 +315,34 @@ jobs:
             );
           }
 
-          Widget _buildLibraryItem(BuildContext context, {required IconData icon, required Color iconColor, required String title, required String subtitle, required VoidCallback onTap}) {
-            return GestureDetector(
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12)),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 56, height: 56,
-                      decoration: BoxDecoration(gradient: LinearGradient(colors: [iconColor, iconColor.withOpacity(0.7)]), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, color: Colors.white),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.white)),
-                          const SizedBox(height: 4),
-                          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.grey),
-                  ],
-                ),
+          Widget _buildItem(IconData icon, Color color, String title, String subtitle) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color)),
+                  const SizedBox(width: 16),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  ]),
+                ],
               ),
             );
           }
         }
         EOF
 
-    - name: STEP 8 - Clean and Generate Code
+    - name: STEP 8 - Build Production APK
       run: |
         cd ${{ env.FLUTTER_DIR }}
-        flutter clean
         flutter pub get
         dart run build_runner build --delete-conflicting-outputs || true
-
-    - name: STEP 9 - Build RELEASE APK
-      run: |
-        cd ${{ env.FLUTTER_DIR }}
         flutter build apk --release
 
-    - name: STEP 10 - Upload APK
+    - name: STEP 9 - Final Artifact Upload
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWave-App-Ready
-        path: "**/*.apk"
+        name: OpenWave-Final-Build
+        path: "**/build/app/outputs/flutter-apk/*.apk"
