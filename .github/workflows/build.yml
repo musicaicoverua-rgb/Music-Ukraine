@@ -324,8 +324,6 @@ jobs:
                 
                 with open(profile_path, 'w', encoding='utf-8') as f:
                     f.write(p_content)
-
-        fix_all()
         EOF
         python3 fix_app.py
 
@@ -363,4 +361,5 @@ jobs:
             if (!mounted) return;
             setState(() => _isLoading = true);
             try {
-              final playlists = await _supabase.getU
+              final playlists = await _supabase.getUserPlaylists();
+   
