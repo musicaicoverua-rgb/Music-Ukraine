@@ -56,7 +56,6 @@ jobs:
         echo "flutter.minSdkVersion=24" >> android/local.properties
         echo "flutter.targetSdkVersion=35" >> android/local.properties
         
-        # Примусове оновлення SDK в build.gradle для плагіна sqlite3_flutter_libs
         if [ -f "android/app/build.gradle" ]; then
           sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 35/g' android/app/build.gradle || true
           sed -i -E 's/compileSdk [0-9]+/compileSdk 35/g' android/app/build.gradle || true
@@ -123,7 +122,7 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Core Fixes YAML Safe)
+    - name: STEP 6 - Code Doctor (Core Fixes & Kotlin Wipe)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
@@ -174,7 +173,6 @@ jobs:
                 txt = f.read()
             if 'JustAudioBackground.init' not in txt:
                 txt = "import 'package:just_audio_background/just_audio_background.dart';\n" + txt
-                
                 init_code = (
                     "\n  await JustAudioBackground.init(\n"
                     "    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',\n"
@@ -182,25 +180,32 @@ jobs:
                     "    androidNotificationOngoing: true,\n"
                     "  );\n"
                 )
-                
                 txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + init_code)
                 with open(main_path, 'w', encoding='utf-8') as f:
                     f.write(txt)
 
+        # Wipe buggy Kotlin code (only English here)
         for root, _, files in os.walk('android/app/src/main'):
             for f in files:
                 if f in ['MainActivity.kt', 'MainActivity.java']:
                     p = os.path.join(root, f)
                     with open(p, 'r', encoding='utf-8') as file:
                         txt = file.read()
-                    txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
-                    txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
+                    
+                    pkg_match = re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt)
+                    pkg_name = pkg_match.group(1) if pkg_match else "com.openwave.app"
+                    
+                    if f == 'MainActivity.kt':
+                        clean_code = "package " + pkg_name + "\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {\n}\n"
+                    else:
+                        clean_code = "package " + pkg_name + ";\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {\n}\n"
+                    
                     with open(p, 'w', encoding='utf-8') as file:
-                        file.write(txt)
+                        file.write(clean_code)
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - Inject Real Audio Player & Mini-Player
+    - name: STEP 7 - Inject Ukrainian UI & Audio Player
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
@@ -242,7 +247,7 @@ jobs:
                 player.play();
               }
             } catch (e) {
-              debugPrint("Помилка відтворення: $e");
+              debugPrint("Playback error: $e");
             }
           }
 
@@ -333,6 +338,19 @@ jobs:
 
         cat << 'EOF' > fix_main_screen.py
         import os, re
+        
+        # 1. Update Profile Tab to Ukrainian UI
+        for root, _, files in os.walk('lib'):
+            if 'profile_tab.dart' in files:
+                p = os.path.join(root, 'profile_tab.dart')
+                with open(p, 'r', encoding='utf-8') as f:
+                    txt = f.read()
+                txt = txt.replace("title: 'admin'.tr(),", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,")
+                txt = re.sub(r"SnackBar\(content:\s*Text\('В розробці\.\.\.'\)\)", "SnackBar(content: Text('В розробці...'))", txt)
+                with open(p, 'w', encoding='utf-8') as f:
+                    f.write(txt)
+        
+        # 2. Add Mini-Player to Main Screen with Ukrainian FAB
         main_path = None
         for root, _, files in os.walk('lib'):
             if 'main_screen.dart' in files:
@@ -345,6 +363,9 @@ jobs:
             imports = "import 'package:openwave/core/services/simple_audio_service.dart';\nimport 'package:openwave/core/models/track_model.dart';\n"
             if "simple_audio_service" not in txt:
                 txt = imports + txt
+            
+            # Український текст для адмін-кнопки
+            txt = txt.replace("const Text('Upload Track',", "const Text('Завантажити трек',")
             
             if "body: Stack(" not in txt:
                 body_match = re.search(r'body:\s*(.*?)(?=\n\s*bottomNavigationBar:|\n\s*floatingActionButton:)', txt, re.DOTALL)
@@ -381,8 +402,8 @@ jobs:
                         "                          children: [\n"
                         "                            Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),\n"
                         "                            Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),\n"
-                        "                          ],\n"
-                        "                        ),\n"
+                        "                          ],
+                                                "                        ),\n"
                         "                      ),\n"
                         "                      StreamBuilder<bool>(\n"
                         "                        stream: SimpleAudioService().player.playingStream,\n"
@@ -404,7 +425,6 @@ jobs:
                         "      ),"
                     )
                     
-                    # Точна і безпечна заміна блоку "body"
                     txt = txt[:body_match.start()] + new_body + "\n      " + txt[body_match.end():]
             
             with open(main_path, 'w', encoding='utf-8') as f:
@@ -422,5 +442,7 @@ jobs:
     - name: STEP 9 - Final Artifact Upload
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWave-Player-Build
+        name: OpenWave-Final-Build
         path: "**/build/app/outputs/flutter-apk/*.apk"
+                        
+                     
