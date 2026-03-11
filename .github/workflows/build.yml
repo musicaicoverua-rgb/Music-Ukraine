@@ -89,7 +89,7 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Clean Architecture Fixer)
+    - name: STEP 6 - Code Doctor (Safe String Injection)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
@@ -134,47 +134,48 @@ jobs:
                     if f == 'main_screen.dart':
                         if 'floatingActionButton' not in txt:
                             txt = "import '../../../../core/services/supabase_service.dart';\n" + txt
-                            fab = """
-      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(
-        backgroundColor: AppTheme.primaryColor,
-        child: const Icon(Icons.playlist_add, color: Colors.white),
-        onPressed: () {
-          final ctrl = TextEditingController();
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: const Color(0xFF1E1E2C),
-              title: const Text('Create Playlist', style: TextStyle(color: Colors.white)),
-              content: TextField(
-                controller: ctrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(hintText: 'Playlist Name', hintStyle: TextStyle(color: Colors.grey)),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-                  onPressed: () async {
-                    if (ctrl.text.isNotEmpty) {
-                      try {
-                        await SupabaseService().createPlaylist(name: ctrl.text);
-                        if (context.mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist created!'), backgroundColor: Colors.green));
-                        }
-                      } catch (e) {
-                        if (context.mounted) Navigator.pop(ctx);
-                      }
-                    }
-                  },
-                  child: const Text('Create'),
-                ),
-              ],
-            ),
-          );
-        },
-      ) : null,
-      bottomNavigationBar:"""
+                            fab = (
+                                "      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(\n"
+                                "        backgroundColor: AppTheme.primaryColor,\n"
+                                "        child: const Icon(Icons.playlist_add, color: Colors.white),\n"
+                                "        onPressed: () {\n"
+                                "          final ctrl = TextEditingController();\n"
+                                "          showDialog(\n"
+                                "            context: context,\n"
+                                "            builder: (ctx) => AlertDialog(\n"
+                                "              backgroundColor: const Color(0xFF1E1E2C),\n"
+                                "              title: const Text('Create Playlist', style: TextStyle(color: Colors.white)),\n"
+                                "              content: TextField(\n"
+                                "                controller: ctrl,\n"
+                                "                style: const TextStyle(color: Colors.white),\n"
+                                "                decoration: const InputDecoration(hintText: 'Playlist Name', hintStyle: TextStyle(color: Colors.grey)),\n"
+                                "              ),\n"
+                                "              actions: [\n"
+                                "                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),\n"
+                                "                ElevatedButton(\n"
+                                "                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),\n"
+                                "                  onPressed: () async {\n"
+                                "                    if (ctrl.text.isNotEmpty) {\n"
+                                "                      try {\n"
+                                "                        await SupabaseService().createPlaylist(name: ctrl.text);\n"
+                                "                        if (context.mounted) {\n"
+                                "                          Navigator.pop(ctx);\n"
+                                "                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist created!'), backgroundColor: Colors.green));\n"
+                                "                        }\n"
+                                "                      } catch (e) {\n"
+                                "                        if (context.mounted) Navigator.pop(ctx);\n"
+                                "                      }\n"
+                                "                    }\n"
+                                "                  },\n"
+                                "                  child: const Text('Create'),\n"
+                                "                ),\n"
+                                "              ],\n"
+                                "            ),\n"
+                                "          );\n"
+                                "        },\n"
+                                "      ) : null,\n"
+                                "      bottomNavigationBar:"
+                            )
                             txt = txt.replace("bottomNavigationBar:", fab)
                     
                     if orig != txt:
@@ -209,52 +210,52 @@ jobs:
                             with open(p, 'r', encoding='utf-8') as f2:
                                 for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
                                     blocs.add(b)
-                                    imports.add(f"import 'package:openwave/{p.replace(os.sep, '/').replace('lib/', '')}';")
+                                    imports.add("import 'package:openwave/" + p.replace(os.sep, '/').replace('lib/', '') + "';\n")
                     
                     istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
                     for i in imports:
-                        if i not in mtxt: istr += i + "\n"
+                        if i not in mtxt: istr += i
                     mtxt = istr + mtxt
                     
-                    pstr = ",\n        ".join([f"BlocProvider<{b}>(create: (_) => getIt<{b}>())" for b in blocs])
+                    pstr = ",\n        ".join(["BlocProvider<" + b + ">(create: (_) => getIt<" + b + ">())" for b in blocs])
                     
-                    wrapper = """
-class GlobalAppWrapper extends StatelessWidget {
-  final Widget child;
-  const GlobalAppWrapper({super.key, required this.child});
-  @override
-  Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-__PROVIDERS__
-      ],
-      child: child,
-    );
-  }
-}
-""".replace("__PROVIDERS__", pstr)
+                    wrapper = (
+                        "\nclass GlobalAppWrapper extends StatelessWidget {\n"
+                        "  final Widget child;\n"
+                        "  const GlobalAppWrapper({super.key, required this.child});\n"
+                        "  @override\n"
+                        "  Widget build(BuildContext context) {\n"
+                        "    return MultiBlocProvider(\n"
+                        "      providers: [\n"
+                        "        " + pstr + "\n"
+                        "      ],\n"
+                        "      child: child,\n"
+                        "    );\n"
+                        "  }\n"
+                        "}\n"
+                    )
 
                     mtxt += "\n" + wrapper
                     mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
                     
-                    shield = """
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: const Color(0xFFFFFFFF),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),
-              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ),
-    );
-  };
-"""
+                    shield = (
+                        "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
+                        "    return MaterialApp(\n"
+                        "      home: Scaffold(\n"
+                        "        backgroundColor: const Color(0xFFFFFFFF),\n"
+                        "        body: SafeArea(\n"
+                        "          child: SingleChildScrollView(\n"
+                        "            padding: const EdgeInsets.all(16),\n"
+                        "            child: Text(\n"
+                        "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
+                        "              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),\n"
+                        "            ),\n"
+                        "          ),\n"
+                        "        ),\n"
+                        "      ),\n"
+                        "    );\n"
+                        "  };\n"
+                    )
                     mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
                     
                     with open(main_p, 'w', encoding='utf-8') as f:
