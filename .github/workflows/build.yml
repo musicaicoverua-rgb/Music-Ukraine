@@ -168,36 +168,36 @@ jobs:
             with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
             if 'JustAudioBackground.init' not in txt:
                 txt = "import 'package:just_audio_background/just_audio_background.dart';\n" + txt
-                safe_init = """
-  try {
-    await JustAudioBackground.init(
-      androidNotificationChannelId: 'com.openwave.app.audio',
-      androidNotificationChannelName: 'Audio playback',
-      androidNotificationOngoing: true,
-    );
-  } catch (e) {
-    debugPrint('Audio background init error: $e');
-  }
-"""
+                safe_init = (
+                    "\n  try {\n"
+                    "    await JustAudioBackground.init(\n"
+                    "      androidNotificationChannelId: 'com.openwave.app.audio',\n"
+                    "      androidNotificationChannelName: 'Audio playback',\n"
+                    "      androidNotificationOngoing: true,\n"
+                    "    );\n"
+                    "  } catch (e) {\n"
+                    "    debugPrint('Audio background init error: $e');\n"
+                    "  }\n"
+                )
                 txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + safe_init)
             
             # Global error catcher to avoid white screen of death
             if 'ErrorWidget.builder' not in txt:
-                error_catcher = """
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Text('CRASH:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),
-          ),
-        ),
-      ),
-    );
-  };
-"""
+                error_catcher = (
+                    "\n  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
+                    "    return MaterialApp(\n"
+                    "      home: Scaffold(\n"
+                    "        backgroundColor: Colors.black,\n"
+                    "        body: Center(\n"
+                    "          child: SingleChildScrollView(\n"
+                    "            padding: const EdgeInsets.all(20),\n"
+                    "            child: Text('CRASH:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),\n"
+                    "          ),\n"
+                    "        ),\n"
+                    "      ),\n"
+                    "    );\n"
+                    "  };\n"
+                )
                 txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + error_catcher)
                 
             with open(main_path, 'w', encoding='utf-8') as f: f.write(txt)
@@ -211,9 +211,9 @@ jobs:
                     pkg_name = pkg_match.group(1) if pkg_match else "com.openwave.app"
                     
                     if f == 'MainActivity.kt':
-                        clean_code = f"package {pkg_name}\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {{\n}}\n"
+                        clean_code = "package " + pkg_name + "\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {\n}\n"
                     else:
-                        clean_code = f"package {pkg_name};\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {{\n}}\n"
+                        clean_code = "package " + pkg_name + ";\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {\n}\n"
                     with open(p, 'w', encoding='utf-8') as file: file.write(clean_code)
         EOF
         python3 fix_app.py
