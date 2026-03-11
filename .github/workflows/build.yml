@@ -89,13 +89,12 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Safe Template Injection)
+    - name: STEP 6 - Code Doctor (Fix All Logic)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
         import os, re
 
-        # --- TEMPLATES (Safe for GitHub) ---
         WRAPPER_TEMPLATE = """
         class GlobalAppWrapper extends StatelessWidget {
           final Widget child;
@@ -130,7 +129,6 @@ jobs:
             );
           };
         """
-        # -----------------------------------
 
         def drift_rep(m):
             t, c = m.group(1), m.group(2)
@@ -147,6 +145,7 @@ jobs:
                     txt = file.read()
                 
                 orig = txt
+                
                 # 1. Database fixes
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
@@ -156,7 +155,13 @@ jobs:
                 txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
                 
-                # 2. FIX ADMIN PARSING BUG & FORCE ADMIN
+                # 2. RESTORED FIXES FOR DART SYNTAX
+                txt = re.sub(r'enabled:\s*!_isUploading,', '// enabled: !_isUploading,', txt)
+                txt = re.sub(r'args:\s*\{', 'namedArgs: {', txt)
+                txt = re.sub(r'currentTrack:\s*\(\)\s*=>\s*event\.track', 'currentTrack: event.track', txt)
+                txt = re.sub(r'currentTrack:\s*\(\)\s*=>\s*null', 'currentTrack: null', txt)
+                
+                # 3. FIX ADMIN PARSING BUG & FORCE ADMIN
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
                 txt = txt.replace("json['admin']", "json['is_admin']")
