@@ -32,21 +32,19 @@ jobs:
       - name: 5. Safe Injector & Magic Fix
         run: |
           cd "${{ env.FLUTTER_DIR }}"
-          # Завантажуємо та запускаємо спеціальний скрипт-хірург, який я написав для вас
+         
           curl -sSL -o magic_fix.py "https://raw.githubusercontent.com/andriimykolyshyn/openwave-fix/main/magic_fix.py" || echo "import os,re" > magic_fix.py
           
-          # Оскільки ми не можемо покладатися на зовнішній файл (його ще немає), 
-          # ми безпечно створюємо його прямо тут, але без шкідливих символів для YAML
           cat << 'EOF' > builder.py
           import os, re
           
-          # 1. Фікс pubspec.yaml
+          
           with open('pubspec.yaml', 'r') as f: pub = f.read()
           if 'just_audio:' not in pub: pub = pub.replace('dependencies:', 'dependencies:\n  just_audio: ^0.9.36\n  just_audio_background: ^0.0.1-beta.13')
           if 'dependency_overrides:' not in pub: pub += '\ndependency_overrides:\n  web: ^0.5.0\n  intl: ^0.19.0\n'
           with open('pubspec.yaml', 'w') as f: f.write(pub)
           
-          # 2. Фікс Android Manifest
+          
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: man = f.read()
@@ -57,7 +55,7 @@ jobs:
                   man = man.replace('</activity>', '</activity>\n        <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter></receiver>\n        <service android:name="com.ryanheise.audioservice.AudioService" android:foregroundServiceType="mediaPlayback" android:exported="true"><intent-filter><action android:name="android.media.browse.MediaBrowserService" /></intent-filter></service>')
               with open(m_path, 'w') as f: f.write(man)
           
-          # 3. Фікс Kotlin
+          
           for r, d, fs in os.walk('android/app/src/main/java'):
               for f in fs:
                   if f.endswith('.kt') or f.endswith('.java'):
@@ -66,7 +64,7 @@ jobs:
                       pkg = re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt).group(1) if re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt) else "com.openwave.app"
                       with open(p, 'w') as fl: fl.write(f"package {pkg}\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\nclass MainActivity: AudioServiceActivity() {{}}\n")
           
-          # 4. Фікс бази даних (Drift)
+          
           def rep(m):
               t = m.group(1); c = m.group(2)
               if 'Companion' in c: return "(delete(" + t + ").." + "where((tbl) => tbl.id.equals(" + re.search(r'id:\s*Value\((.*?)\)', c).group(1) + "))).go();"
