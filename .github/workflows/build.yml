@@ -29,7 +29,7 @@ jobs:
         FLUTTER_DIR=$(find . -name "pubspec.yaml" -exec dirname {} \; | head -n 1)
         echo "FLUTTER_DIR=$FLUTTER_DIR" >> $GITHUB_ENV
 
-    - name: STEP 2 - Add Audio Dependencies
+    - name: STEP 2 - Dependencies Fix
       run: |
         cd ${{ env.FLUTTER_DIR }}
         if ! grep -q "just_audio:" pubspec.yaml; then
@@ -44,7 +44,7 @@ jobs:
           intl: ^0.19.0
         EOF
 
-    - name: STEP 3 - Android Config Fix (SDK 35)
+    - name: STEP 3 - Android Config
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
@@ -64,7 +64,7 @@ jobs:
           sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 24/g' android/app/build.gradle || true
         fi
 
-    - name: STEP 4 - Asset Generator & Permissions
+    - name: STEP 4 - Android Permissions & Assets
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p assets/images assets/animations assets/icons assets/fonts assets/translations assets/langs
@@ -103,7 +103,7 @@ jobs:
         </service>' $MANIFEST
         fi
 
-    - name: STEP 5 - Native Resources
+    - name: STEP 5 - Native UI Setup
       run: |
         cd ${{ env.FLUTTER_DIR }}
         RES_DIR="android/app/src/main/res"
@@ -122,7 +122,7 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Core Fixes & Kotlin Wipe)
+    - name: STEP 6 - Code Doctor (Safe Init & Bug Fixes)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
@@ -133,8 +133,7 @@ jobs:
             c = m.group(2)
             if 'Companion' in c:
                 id_m = re.search(r'id:\s*Value\((.*?)\)', c)
-                if id_m:
-                    return "(delete(" + t + ")..where((tbl) => tbl.id.equals(" + id_m.group(1) + "))).go();"
+                if id_m: return "(delete(" + t + ")..where((tbl) => tbl.id.equals(" + id_m.group(1) + "))).go();"
             c = c.replace(t + '.', 'tbl.')
             return "(delete(" + t + ")..where((tbl) => " + c + ")).go();"
 
@@ -142,18 +141,15 @@ jobs:
             for f in files:
                 if not f.endswith('.dart'): continue
                 p = os.path.join(root, f)
-                with open(p, 'r', encoding='utf-8') as file:
-                    txt = file.read()
+                with open(p, 'r', encoding='utf-8') as file: txt = file.read()
                 orig = txt
                 
                 txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
                 txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
-                
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
-                
                 txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
                 txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
                 txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
@@ -164,41 +160,65 @@ jobs:
                 txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
                 
                 if orig != txt:
-                    with open(p, 'w', encoding='utf-8') as file:
-                        file.write(txt)
+                    with open(p, 'w', encoding='utf-8') as file: file.write(txt)
 
+        # VERY SAFE MAIN.DART INIT (Prevents White Screen)
         main_path = next((os.path.join(r, f) for r, _, fs in os.walk('lib') for f in fs if f == 'main.dart'), None)
         if main_path:
-            with open(main_path, 'r', encoding='utf-8') as f:
-                txt = f.read()
+            with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
             if 'JustAudioBackground.init' not in txt:
                 txt = "import 'package:just_audio_background/just_audio_background.dart';\n" + txt
-                init_code = "\n  await JustAudioBackground.init(\n    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',\n    androidNotificationChannelName: 'Audio playback',\n    androidNotificationOngoing: true,\n  );\n"
-                txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + init_code)
-                with open(main_path, 'w', encoding='utf-8') as f:
-                    f.write(txt)
+                safe_init = """
+  try {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.openwave.app.audio',
+      androidNotificationChannelName: 'Audio playback',
+      androidNotificationOngoing: true,
+    );
+  } catch (e) {
+    debugPrint('Audio background init error: $e');
+  }
+"""
+                txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + safe_init)
+            
+            # Global error catcher to avoid white screen of death
+            if 'ErrorWidget.builder' not in txt:
+                error_catcher = """
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Text('CRASH:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),
+          ),
+        ),
+      ),
+    );
+  };
+"""
+                txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + error_catcher)
+                
+            with open(main_path, 'w', encoding='utf-8') as f: f.write(txt)
 
         for root, _, files in os.walk('android/app/src/main'):
             for f in files:
                 if f in ['MainActivity.kt', 'MainActivity.java']:
                     p = os.path.join(root, f)
-                    with open(p, 'r', encoding='utf-8') as file:
-                        txt = file.read()
-                    
+                    with open(p, 'r', encoding='utf-8') as file: txt = file.read()
                     pkg_match = re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt)
                     pkg_name = pkg_match.group(1) if pkg_match else "com.openwave.app"
                     
                     if f == 'MainActivity.kt':
-                        clean_code = "package " + pkg_name + "\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {\n}\n"
+                        clean_code = f"package {pkg_name}\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {{\n}}\n"
                     else:
-                        clean_code = "package " + pkg_name + ";\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {\n}\n"
-                    
-                    with open(p, 'w', encoding='utf-8') as file:
-                        file.write(clean_code)
+                        clean_code = f"package {pkg_name};\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {{\n}}\n"
+                    with open(p, 'w', encoding='utf-8') as file: file.write(clean_code)
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - Inject Ukrainian UI & Audio Player
+    - name: STEP 7 - App UI (Ukrainian) & Player Engine
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
@@ -245,11 +265,8 @@ jobs:
           }
 
           void togglePlayPause() {
-            if (player.playing) {
-              player.pause();
-            } else {
-              player.play();
-            }
+            if (player.playing) player.pause();
+            else player.play();
           }
         }
         INNEREOF
@@ -275,9 +292,9 @@ jobs:
           bool _loading = true;
 
           @override
-          void initState() { super.initState(); _loadData(); }
+          void initState() { super.initState(); _safeLoad(); }
 
-          Future<void> _loadData() async {
+          Future<void> _safeLoad() async {
             if (!mounted) return;
             setState(() => _loading = true);
             try {
@@ -291,12 +308,12 @@ jobs:
           @override
           Widget build(BuildContext context) {
             return RefreshIndicator(
-              onRefresh: _loadData,
+              onRefresh: _safeLoad,
               child: CustomScrollView(
                 slivers: [
                   const SliverAppBar(floating: true, title: Text('OpenWave', style: TextStyle(fontWeight: FontWeight.bold))),
                   if (_loading) const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-                  else if (_tracks.isEmpty) const SliverFillRemaining(child: Center(child: Text('Пісень ще немає. Завантажте першу!')))
+                  else if (_tracks.isEmpty) const SliverFillRemaining(child: Center(child: Text('Пісень ще немає. Завантажте першу!', style: TextStyle(color: Colors.white))))
                   else SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList(
@@ -311,9 +328,7 @@ jobs:
                               title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                               subtitle: Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                               trailing: const Icon(Icons.play_circle_fill, color: AppTheme.primaryColor, size: 32),
-                              onTap: () {
-                                SimpleAudioService().playTrack(track);
-                              },
+                              onTap: () => SimpleAudioService().playTrack(track),
                             ),
                           );
                         },
@@ -355,8 +370,8 @@ jobs:
             if (!mounted) return;
             setState(() => _loading = true);
             try {
-              final playlists = await _supabase.getUserPlaylists();
-              if (mounted) setState(() { _playlists = playlists; _loading = false; });
+              final pl = await _supabase.getUserPlaylists();
+              if (mounted) setState(() { _playlists = pl; _loading = false; });
             } catch (e) {
               if (mounted) setState(() => _loading = false);
             }
@@ -369,11 +384,7 @@ jobs:
               builder: (ctx) => AlertDialog(
                 backgroundColor: const Color(0xFF1E1E2C),
                 title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),
-                content: TextField(
-                  controller: ctrl,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey)),
-                ),
+                content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey))),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),
                   ElevatedButton(
@@ -397,39 +408,24 @@ jobs:
               onRefresh: _loadPlaylists,
               child: CustomScrollView(
                 slivers: [
-                  const SliverAppBar(
-                    floating: true,
-                    title: Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                  const SliverAppBar(floating: true, title: Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold))),
                   SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          if (index == 0) {
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                                Row(
-                                  children: [
-                                    IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
-                                    IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
-                                  ]
-                                )
-                              ],
-                            );
-                          }
-                          
-                          if (_loading) {
-                            if (index == 1) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
-                            return const SizedBox.shrink();
-                          }
-                          
-                          if (_playlists.isEmpty) {
-                            if (index == 1) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть свій перший плейлист!', style: TextStyle(color: AppTheme.primaryColor)))));
-                            return const SizedBox.shrink();
-                          }
+                          if (index == 0) return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                              Row(children: [
+                                IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
+                                IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
+                              ])
+                            ],
+                          );
+                          if (_loading) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+                          if (_playlists.isEmpty) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть свій перший плейлист!', style: TextStyle(color: AppTheme.primaryColor)))));
                           
                           final p = _playlists[index - 1];
                           return ListTile(
@@ -457,53 +453,40 @@ jobs:
         for root, _, files in os.walk('lib'):
             if 'profile_tab.dart' in files:
                 p = os.path.join(root, 'profile_tab.dart')
-                with open(p, 'r', encoding='utf-8') as f:
-                    txt = f.read()
+                with open(p, 'r', encoding='utf-8') as f: txt = f.read()
                 txt = re.sub(r"title:\s*'admin'\.tr\(\),.*?icon:\s*Icons\.admin_panel_settings,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload,", txt, flags=re.DOTALL)
                 txt = re.sub(r"title:\s*'Завантажити трек \(Адмін\)'.*?icon:\s*Icons\.cloud_upload,.*?textColor:\s*Colors\.green,.*?icon:\s*Icons\.cloud_upload,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,", txt, flags=re.DOTALL)
-                txt = txt.replace("title: 'Upload Track (Admin)',", "title: 'Завантажити трек (Адмін)',")
                 txt = re.sub(r"context\.push\('/[^']+'\)", "ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...')))", txt)
-                txt = re.sub(r"SnackBar\(content:\s*Text\('Coming soon\.\.\.'\)\)", "SnackBar(content: Text('В розробці...'))", txt)
-                with open(p, 'w', encoding='utf-8') as f:
-                    f.write(txt)
+                with open(p, 'w', encoding='utf-8') as f: f.write(txt)
         
         main_path = None
         for root, _, files in os.walk('lib'):
-            if 'main_screen.dart' in files:
-                main_path = os.path.join(root, 'main_screen.dart')
+            if 'main_screen.dart' in files: main_path = os.path.join(root, 'main_screen.dart')
         
         if main_path:
-            with open(main_path, 'r', encoding='utf-8') as f:
-                txt = f.read()
+            with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
             
             imports = "import 'package:openwave/core/services/simple_audio_service.dart';\nimport 'package:openwave/core/models/track_model.dart';\nimport 'package:openwave/core/services/supabase_service.dart';\nimport 'package:openwave/features/admin/presentation/screens/admin_screen.dart';\n"
-            if "simple_audio_service" not in txt:
-                txt = imports + txt
+            if "simple_audio_service" not in txt: txt = imports + txt
                 
             if "floatingActionButton:" not in txt:
                 fab = "      floatingActionButton: _currentIndex == 0 ? FutureBuilder<bool>(\n        future: SupabaseService().isAdmin(),\n        builder: (context, snapshot) {\n          if (snapshot.data == true) {\n            return FloatingActionButton.extended(\n              backgroundColor: Colors.green,\n              icon: const Icon(Icons.cloud_upload, color: Colors.white),\n              label: const Text('Завантажити трек', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),\n              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),\n            );\n          }\n          return const SizedBox.shrink();\n        },\n      ) : null,\n      bottomNavigationBar:"
                 txt = txt.replace("bottomNavigationBar:", fab)
             
-            txt = txt.replace("const Text('Upload Track',", "const Text('Завантажити трек',")
-            
             if "body: Stack(" not in txt:
                 body_match = re.search(r'body:\s*(.*?)(?=\n\s*bottomNavigationBar:|\n\s*floatingActionButton:)', txt, re.DOTALL)
                 if body_match:
                     original_body = body_match.group(1).strip()
-                    if original_body.endswith(','):
-                        original_body = original_body[:-1]
-                    
-                    new_body_template = "body: Stack(\n        children: [\n          Positioned.fill(child: {{BODY}}),\n          Positioned(\n            bottom: 0, left: 0, right: 0,\n            child: ValueListenableBuilder<TrackModel?>(\n              valueListenable: SimpleAudioService().currentTrack,\n              builder: (context, track, child) {\n                if (track == null) return const SizedBox.shrink();\n                return Container(\n                  height: 65,\n                  decoration: BoxDecoration(\n                    color: const Color(0xFF2C2C3E),\n                    border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),\n                  ),\n                  padding: const EdgeInsets.symmetric(horizontal: 16),\n                  child: Row(\n                    children: [\n                      const Icon(Icons.music_note, color: Colors.white),\n                      const SizedBox(width: 12),\n                      Expanded(\n                        child: Column(\n                          crossAxisAlignment: CrossAxisAlignment.start,\n                          mainAxisAlignment: MainAxisAlignment.center,\n                          children: [\n                            Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),\n                            Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),\n                          ],\n                        ),\n                      ),\n                      StreamBuilder<bool>(\n                        stream: SimpleAudioService().player.playingStream,\n                        builder: (context, snapshot) {\n                          final isPlaying = snapshot.data ?? false;\n                          return IconButton(\n                            icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36),\n                            onPressed: () => SimpleAudioService().togglePlayPause(),\n                          );\n                        },\n                      ),\n                    ],\n                  ),\n                );\n              },\n            ),\n          ),\n        ],\n      ),"
+                    if original_body.endswith(','): original_body = original_body[:-1]
+                    new_body_template = "body: Stack(\n        children: [\n          Positioned.fill(child: {{BODY}}),\n          Positioned(\n            bottom: 0, left: 0, right: 0,\n            child: ValueListenableBuilder<TrackModel?>(\n              valueListenable: SimpleAudioService().currentTrack,\n              builder: (context, track, child) {\n                if (track == null) return const SizedBox.shrink();\n                return Container(\n                  height: 65,\n                  decoration: BoxDecoration(color: const Color(0xFF2C2C3E), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),\n                  padding: const EdgeInsets.symmetric(horizontal: 16),\n                  child: Row(\n                    children: [\n                      const Icon(Icons.music_note, color: Colors.white),\n                      const SizedBox(width: 12),\n                      Expanded(\n                        child: Column(\n                          crossAxisAlignment: CrossAxisAlignment.start,\n                          mainAxisAlignment: MainAxisAlignment.center,\n                          children: [\n                            Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),\n                            Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),\n                          ],\n                        ),\n                      ),\n                      StreamBuilder<bool>(\n                        stream: SimpleAudioService().player.playingStream,\n                        builder: (context, snapshot) {\n                          final isPlaying = snapshot.data ?? false;\n                          return IconButton(\n                            icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36),\n                            onPressed: () => SimpleAudioService().togglePlayPause(),\n                          );\n                        },\n                      ),\n                    ],\n                  ),\n                );\n              },\n            ),\n          ),\n        ],\n      ),"
                     new_body = new_body_template.replace('{{BODY}}', original_body)
-                    
                     txt = txt[:body_match.start()] + new_body + "\n      " + txt[body_match.end():]
             
-            with open(main_path, 'w', encoding='utf-8') as f:
-                f.write(txt)
+            with open(main_path, 'w', encoding='utf-8') as f: f.write(txt)
         EOF
         python3 fix_main_screen.py
 
-    - name: STEP 8 - Build Production APK
+    - name: STEP 8 - Build Ready APK
       run: |
         cd ${{ env.FLUTTER_DIR }}
         flutter pub get
