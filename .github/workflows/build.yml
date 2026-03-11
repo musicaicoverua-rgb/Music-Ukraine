@@ -150,7 +150,6 @@ jobs:
                 txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 
-                # FIXED REGEX: No more multiple repeats error!
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\([^)]*\)\s*,?', '', txt)
                 
                 txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
@@ -356,7 +355,7 @@ jobs:
                           title: Text(p.name, style: const TextStyle(color: Colors.white)),
                           subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
                           onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
-                        );
+                                                  );
                       }, childCount: _loading || _playlists.isEmpty ? 2 : _playlists.length + 1),
                     ),
                   ),
@@ -432,7 +431,8 @@ jobs:
         // REPLACE_PROF_IMPORT
 
         class MainScreen extends StatefulWidget {
-          const MainScreen({super.key});
+          final Widget? child; // THIS IS THE FIX FOR THE ROUTER ERROR
+          const MainScreen({super.key, this.child});
           @override State<MainScreen> createState() => _MainScreenState();
         }
 
@@ -530,3 +530,4 @@ jobs:
       with:
         name: OpenWave-Final-Build
         path: "**/build/app/outputs/flutter-apk/*.apk"
+   
