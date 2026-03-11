@@ -122,7 +122,7 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Safe Init & Bug Fixes)
+    - name: STEP 6 - Database & Kotlin Doctor
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
@@ -164,20 +164,7 @@ jobs:
                 if orig != txt:
                     with open(p, 'w', encoding='utf-8') as file: file.write(txt)
 
-        main_path = next((os.path.join(r, f) for r, _, fs in os.walk('lib') for f in fs if f == 'main.dart'), None)
-        if main_path:
-            with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
-            if 'JustAudioBackground.init' not in txt:
-                txt = "import 'package:just_audio_background/just_audio_background.dart';\n" + txt
-                safe_init = "\n  try {\n    await JustAudioBackground.init(\n      androidNotificationChannelId: 'com.openwave.app.audio',\n      androidNotificationChannelName: 'Audio playback',\n      androidNotificationOngoing: true,\n    );\n  } catch (e) {\n    debugPrint('Audio init error: $e');\n  }\n"
-                txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + safe_init)
-            
-            if 'ErrorWidget.builder' not in txt:
-                error_catcher = "\n  ErrorWidget.builder = (FlutterErrorDetails details) {\n    return MaterialApp(\n      home: Scaffold(\n        backgroundColor: Colors.black,\n        body: Center(\n          child: SingleChildScrollView(\n            padding: const EdgeInsets.all(20),\n            child: Text('ПОМИЛКА:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),\n          ),\n        ),\n      ),\n    );\n  };\n"
-                txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + error_catcher)
-                
-            with open(main_path, 'w', encoding='utf-8') as f: f.write(txt)
-
+        # Wipe buggy Kotlin code
         for root, _, files in os.walk('android/app/src/main'):
             for f in files:
                 if f in ['MainActivity.kt', 'MainActivity.java']:
@@ -200,7 +187,6 @@ jobs:
         mkdir -p lib/features/gamification/presentation/screens
         mkdir -p lib/features/radio/presentation/screens
         
-        # 1. DAILY REWARD SCREEN
         cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
         import 'package:flutter/material.dart';
         import 'dart:math';
@@ -235,7 +221,6 @@ jobs:
         }
         EOF
 
-        # 2. SPIN WHEEL SCREEN
         cat << 'EOF' > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
         import 'package:flutter/material.dart';
         import 'dart:math';
@@ -285,7 +270,6 @@ jobs:
         }
         EOF
 
-        # 3. ACHIEVEMENTS SCREEN
         cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
         import 'package:flutter/material.dart';
         
@@ -321,7 +305,6 @@ jobs:
         }
         EOF
 
-        # 4. RADIO SCREEN
         cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
         import 'package:flutter/material.dart';
         import 'package:openwave/core/services/supabase_service.dart';
@@ -374,7 +357,7 @@ jobs:
         }
         EOF
 
-    - name: STEP 8 - Core UI Override (Ukrainian + No AuthBloc)
+    - name: STEP 8 - Core UI Override
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
@@ -612,7 +595,7 @@ jobs:
         // REPLACE_PROF_IMPORT
 
         class MainScreen extends StatefulWidget {
-          final Widget? child; // THIS IS THE FIX FOR THE ROUTER ERROR
+          final Widget? child;
           const MainScreen({super.key, this.child});
           @override State<MainScreen> createState() => _MainScreenState();
         }
@@ -700,14 +683,74 @@ jobs:
         sed -i "s|// REPLACE_LIB_IMPORT|import 'package:openwave/$LIB_PATH';|g" "$MAIN_FILE"
         sed -i "s|// REPLACE_PROF_IMPORT|import 'package:openwave/$PROF_PATH';|g" "$MAIN_FILE"
 
-    - name: STEP 9 - Build Ready APK
+    - name: STEP 9 - The Root Bypass (Kill AuthBloc)
+      run: |
+        cd ${{ env.FLUTTER_DIR }}
+        MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
+        MAIN_PATH=$(echo "$MAIN_FILE" | sed 's|lib/||')
+        
+        cat << 'EOF' > lib/main.dart
+        import 'package:flutter/material.dart';
+        import 'package:just_audio_background/just_audio_background.dart';
+        // REPLACE_MAIN_IMPORT
+        
+        void main() async {
+          WidgetsFlutterBinding.ensureInitialized();
+          try {
+            await JustAudioBackground.init(
+              androidNotificationChannelId: 'com.openwave.app.audio',
+              androidNotificationChannelName: 'Audio playback',
+              androidNotificationOngoing: true,
+            );
+          } catch (e) {
+            debugPrint('Audio init error: $e');
+          }
+
+          ErrorWidget.builder = (FlutterErrorDetails details) {
+            return MaterialApp(
+              home: Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Text('СИСТЕМНА ПОМИЛКА:\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),
+                  ),
+                ),
+              ),
+            );
+          };
+
+          runApp(const OpenWaveApp());
+        }
+
+        class OpenWaveApp extends StatelessWidget {
+          const OpenWaveApp({super.key});
+
+          @override
+          Widget build(BuildContext context) {
+            return MaterialApp(
+              title: 'OpenWave',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData.dark().copyWith(
+                scaffoldBackgroundColor: Colors.black,
+                primaryColor: const Color(0xFF6C63FF),
+              ),
+              home: const MainScreen(),
+            );
+          }
+        }
+        EOF
+        
+        sed -i "s|// REPLACE_MAIN_IMPORT|import 'package:openwave/$MAIN_PATH';|g" lib/main.dart
+
+    - name: STEP 10 - Build Ready APK
       run: |
         cd ${{ env.FLUTTER_DIR }}
         flutter pub get
         dart run build_runner build --delete-conflicting-outputs || true
         flutter build apk --release
 
-    - name: STEP 10 - Final Artifact Upload
+    - name: STEP 11 - Final Artifact Upload
       uses: actions/upload-artifact@v4
       with:
         name: OpenWave-Final-App
