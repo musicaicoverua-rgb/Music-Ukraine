@@ -683,7 +683,7 @@ jobs:
         sed -i "s|// REPLACE_LIB_IMPORT|import 'package:openwave/$LIB_PATH';|g" "$MAIN_FILE"
         sed -i "s|// REPLACE_PROF_IMPORT|import 'package:openwave/$PROF_PATH';|g" "$MAIN_FILE"
 
-    - name: STEP 9 - The Root Bypass (Kill AuthBloc)
+    - name: STEP 9 - The Root Bypass (Supabase Init Added)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
@@ -692,10 +692,21 @@ jobs:
         cat << 'EOF' > lib/main.dart
         import 'package:flutter/material.dart';
         import 'package:just_audio_background/just_audio_background.dart';
+        import 'package:supabase_flutter/supabase_flutter.dart';
         // REPLACE_MAIN_IMPORT
         
         void main() async {
           WidgetsFlutterBinding.ensureInitialized();
+          
+          try {
+            await Supabase.initialize(
+              url: 'https://nmowlkjoragnffkxbrzq.supabase.co',
+              anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYyNjcsImV4cCI6MjA4ODY3MjI2N30.yNHTyZfXOjy-lJNxCOm8F9_YVGWF6kGWmueFYBHTfI0',
+            );
+          } catch (e) {
+            debugPrint('Supabase init error: $e');
+          }
+
           try {
             await JustAudioBackground.init(
               androidNotificationChannelId: 'com.openwave.app.audio',
