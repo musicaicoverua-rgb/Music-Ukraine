@@ -120,6 +120,16 @@ jobs:
         cat << 'EOF' > fix_app.py
         import os, re
 
+        def drift_rep(m):
+            t = m.group(1)
+            c = m.group(2)
+            if 'Companion' in c:
+                id_m = re.search(r'id:\s*Value\((.*?)\)', c)
+                if id_m:
+                    return "(delete(" + t + ")..where((tbl) => tbl.id.equals(" + id_m.group(1) + "))).go();"
+            c = c.replace(t + '.', 'tbl.')
+            return "(delete(" + t + ")..where((tbl) => " + c + ")).go();"
+
         for root, _, files in os.walk('lib'):
             for f in files:
                 if not f.endswith('.dart'): continue
@@ -127,10 +137,16 @@ jobs:
                 with open(p, 'r', encoding='utf-8') as file:
                     txt = file.read()
                 orig = txt
+                
                 txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
                 txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
+                
+                # Відновлено лікування бази даних Drift
+                txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
+                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
+                
                 if orig != txt:
                     with open(p, 'w', encoding='utf-8') as file:
                         file.write(txt)
@@ -142,7 +158,6 @@ jobs:
             if 'JustAudioBackground.init' not in txt:
                 txt = "import 'package:just_audio_background/just_audio_background.dart';\n" + txt
                 
-                # Bezpechniy ryadok bez potriinyh lapok
                 init_code = (
                     "\n  await JustAudioBackground.init(\n"
                     "    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',\n"
@@ -320,7 +335,6 @@ jobs:
                 if body_match:
                     original_body = body_match.group(1)
                     
-                    # Bezpechniy multiline ryadok
                     new_body = (
                         "body: Stack(\n"
                         "        children: [\n"
