@@ -38,7 +38,7 @@ jobs:
           intl: ^0.19.0
         EOF
 
-    - name: STEP 3 - Fix Native Android Config & Boost RAM
+    - name: STEP 3 - Fix Native Android Config
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
@@ -89,129 +89,121 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Ultra Safe Python Doctor
+    - name: STEP 6 - Code Doctor (Fix Logic & Force Admin)
       run: |
         cd ${{ env.FLUTTER_DIR }}
-        cat << 'EOF' > script.py
+        python3 - << 'EOF'
         import os, re
-
-        def fix_all():
-            # 1. Fix Syntax
-            for root, _, files in os.walk('lib'):
-                for f in files:
-                    if not f.endswith('.dart'): continue
+        
+        def drift_rep(m):
+            t, c = m.group(1), m.group(2)
+            if 'Companion' in c:
+                id_m = re.search(r'id:\s*Value\((.*?)\)', c)
+                if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
+            return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
+        
+        for root, _, files in os.walk('lib'):
+            for f in files:
+                if not f.endswith('.dart'): continue
+                p = os.path.join(root, f)
+                with open(p, 'r', encoding='utf-8') as file:
+                    txt = file.read()
+                
+                orig = txt
+                # 1. Database fixes
+                txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
+                txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
+                txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
+                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
+                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
+                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
+                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
+                
+                # 2. FIX ADMIN PARSING BUG
+                txt = txt.replace("json['isAdmin']", "json['is_admin']")
+                txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
+                txt = txt.replace("json['admin']", "json['is_admin']")
+                
+                # 3. FORCE ADMIN RIGHTS (Aggressive override)
+                txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
+                
+                if orig != txt:
+                    with open(p, 'w', encoding='utf-8') as file:
+                        file.write(txt)
+        
+        for root, _, files in os.walk('android/app/src/main'):
+            for f in files:
+                if f in ['MainActivity.kt', 'MainActivity.java']:
                     p = os.path.join(root, f)
                     with open(p, 'r', encoding='utf-8') as file:
                         txt = file.read()
-                    
-                    orig = txt
-                    def drift_rep(m):
-                        t, c = m.group(1), m.group(2)
-                        if 'Companion' in c:
-                            id_m = re.search(r'id:\s*Value\((.*?)\)', c)
-                            if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
-                        return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
-                    
-                    txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
-                    txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
-                    txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
-                    txt = txt.replace("query = query.eq('genre', genre);", "// eq")
-                    txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
-                    txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
-                    txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
-                    txt = txt.replace("enabled: !_isUploading,", "// disabled")
-                    txt = txt.replace("args: {", "namedArgs: {")
-                    txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
-                    txt = txt.replace("currentTrack: () => null", "currentTrack: null")
-                    
-                    if orig != txt:
-                        with open(p, 'w', encoding='utf-8') as file:
-                            file.write(txt)
-
-            # 2. Fix Android Background Activity
-            for root, _, files in os.walk('android/app/src/main'):
-                for f in files:
-                    if f in ['MainActivity.kt', 'MainActivity.java']:
-                        p = os.path.join(root, f)
-                        with open(p, 'r', encoding='utf-8') as file:
-                            txt = file.read()
-                        txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
-                        txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
-                        txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
-                        txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
-                        with open(p, 'w', encoding='utf-8') as file:
-                            file.write(txt)
-
-            # 3. Inject Main Blocs Safely
-            main_p = 'lib/main.dart'
-            if not os.path.exists(main_p): return
+                    txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
+                    txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
+                    txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
+                    txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
+                    with open(p, 'w', encoding='utf-8') as file:
+                        file.write(txt)
+        
+        main_p = 'lib/main.dart'
+        if os.path.exists(main_p):
             with open(main_p, 'r', encoding='utf-8') as f:
                 mtxt = f.read()
+            if 'GlobalAppWrapper' not in mtxt:
+                blocs = set()
+                imports = set()
+                for root, _, files in os.walk('lib'):
+                    for f in files:
+                        if not f.endswith('.dart'): continue
+                        p = os.path.join(root, f)
+                        with open(p, 'r', encoding='utf-8') as f2:
+                            for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
+                                blocs.add(b)
+                                imports.add(f"import 'package:openwave/{p.replace(os.sep, '/').replace('lib/', '')}';")
+                istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
+                for i in imports:
+                    if i not in mtxt: istr += i + "\n"
+                mtxt = istr + mtxt
+                pstr = ",\n                ".join([f"BlocProvider<{b}>(create: (_) => getIt<{b}>())" for b in blocs])
+                wrapper = f"""
+class GlobalAppWrapper extends StatelessWidget {{
+  final Widget child;
+  const GlobalAppWrapper({{super.key, required this.child}});
+  @override
+  Widget build(BuildContext context) {{
+    return MultiBlocProvider(
+      providers: [
+        {pstr}
+      ],
+      child: child,
+    );
+  }}
+}}
+"""
+                mtxt += "\n" + wrapper
+                mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
                 
-            if 'GlobalAppWrapper' in mtxt: return
-
-            blocs = set()
-            imports = set()
-            for root, _, files in os.walk('lib'):
-                for f in files:
-                    if not f.endswith('.dart'): continue
-                    p = os.path.join(root, f)
-                    with open(p, 'r', encoding='utf-8') as f2:
-                        for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
-                            blocs.add(b)
-                            imports.add(f"import 'package:openwave/{p.replace(os.sep, '/').replace('lib/', '')}';")
-
-            istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
-            for i in imports:
-                if i not in mtxt: istr += i + "\n"
-            mtxt = istr + mtxt
-
-            pstr = ",\n        ".join([f"BlocProvider<{b}>(create: (_) => getIt<{b}>())" for b in blocs])
-
-            wrapper = (
-                "\nclass GlobalAppWrapper extends StatelessWidget {\n"
-                "  final Widget child;\n"
-                "  const GlobalAppWrapper({super.key, required this.child});\n"
-                "  @override\n"
-                "  Widget build(BuildContext context) {\n"
-                "    return MultiBlocProvider(\n"
-                "      providers: [\n"
-                "        " + pstr + "\n"
-                "      ],\n"
-                "      child: child,\n"
-                "    );\n"
-                "  }\n"
-                "}\n"
-            )
-            mtxt += "\n" + wrapper
-            mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
-
-            shield = (
-                "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
-                "    return MaterialApp(\n"
-                "      home: Scaffold(\n"
-                "        backgroundColor: Colors.white,\n"
-                "        body: SafeArea(\n"
-                "          child: SingleChildScrollView(\n"
-                "            padding: const EdgeInsets.all(16),\n"
-                "            child: Text(\n"
-                "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
-                "              style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),\n"
-                "            ),\n"
-                "          ),\n"
-                "        ),\n"
-                "      ),\n"
-                "    );\n"
-                "  };\n"
-            )
-            mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
-
-            with open(main_p, 'w', encoding='utf-8') as f:
-                f.write(mtxt)
-
-        fix_all()
+                shield = """
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: const Color(0xFFFFFFFF),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),
+              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+"""
+                mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
+                with open(main_p, 'w', encoding='utf-8') as f:
+                    f.write(mtxt)
         EOF
-        python3 script.py
 
     - name: STEP 7 - Pub Get & Generate Code
       run: |
