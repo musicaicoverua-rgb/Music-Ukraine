@@ -38,7 +38,7 @@ jobs:
         EOF
     - name: STEP 3 - Android Config
       run: |
-        cd ${{ env.FLUTTER_DIR }}   
+        cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
         echo "kotlin_version=1.9.0" >> android/gradle.properties
         echo "android.useAndroidX=true" >> android/gradle.properties
@@ -46,7 +46,7 @@ jobs:
         echo "org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=1G" >> android/gradle.properties
         echo "flutter.compileSdkVersion=35" >> android/local.properties
         echo "flutter.minSdkVersion=24" >> android/local.properties
-        echo "flutter.targetSdkVersion=35" >> android/local.properties      
+        echo "flutter.targetSdkVersion=35" >> android/local.properties        
         if [ -f "android/app/build.gradle" ]; then
           sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 35/g' android/app/build.gradle || true
           sed -i -E 's/compileSdk [0-9]+/compileSdk 35/g' android/app/build.gradle || true
@@ -54,8 +54,8 @@ jobs:
           sed -i -E 's/targetSdk [0-9]+/targetSdk 35/g' android/app/build.gradle || true
           sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 24/g' android/app/build.gradle || true
         fi
-            - name: STEP 4 - Android Permissions & Assets
-            run: |
+    - name: STEP 4 - Android Permissions & Assets
+      run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p assets/images assets/animations assets/icons assets/fonts assets/translations assets/langs
         touch assets/images/logo.png assets/images/default_cover.png
@@ -63,10 +63,37 @@ jobs:
         echo "{}" > assets/animations/success.json
         echo "{}" > assets/animations/confetti.json
         touch assets/fonts/Inter-Regular.ttf assets/fonts/Inter-Medium.ttf assets/fonts/Inter-SemiBold.ttf assets/fonts/Inter-Bold.ttf
-        for lang in uk en es ru de fr pl cs; do echo "{}" > assets/translations/$lang.json; echo "{}" > assets/langs/$lang.json; done        
-        # Base64 encoded Python script to fix AndroidManifest (safe for YAML)
-        echo "aW1wb3J0IG9zCm1hbmlmZXN0ID0gImFuZHJvaWQvYXBwL3NyYy9tYWluL0FuZHJvaWRNYW5pZmVzdC54bWwiCmlmIG9zLnBhdGguZXhpc3RzKG1hbmlmZXN0KToKICAgIHdpdGggb3BlbihtYW5pZmVzdCwgJ3InLCBlbmNvZGluZz0ndXRmLTgnKSBhcyBmOiB0eHQgPSBmLnJlYWQoKQogICAgcGVybXMgPSBbIklOVEVSTkVUIiwgIldBS0VfTE9DSyIsICJGT1JFR1JPVU5EX1NFUlZJQ0UiLCAiRk9SRUdST1VORF9TRVJWSUNFX01FRElBX1BMQVlCQUNLIl0KICAgIGZvciBwIGluIHBlcm1zOgogICAgICAgIHRhZyA9IGYnPHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi57cH0iIC8+JwogICAgICAgIGlmIHRhZyBub3QgaW4gdHh0OiB0eHQgPSB0eHQucmVwbGFjZSgnPGFwcGxpY2F0aW9uJywgZicgICAge3RhZ31cbiAgICA8YXBwbGljYXRpb24nKQogICAgaWYgJ0F1ZGlvU2VydmljZUFjdGl2aXR5JyBub3QgaW4gdHh0OiB0eHQgPSB0eHQucmVwbGFjZSgnYW5kcm9pZDpuYW1lPSIuTWFpbkFjdGl2aXR5IicsICdhbmRyb2lkOm5hbWU9ImNvbS5yeWFuaGVpc2UuYXVkaW9zZXJ2aWNlLkF1ZGlvU2VydmljZUFjdGl2aXR5IicpCiAgICBpZiAnTWVkaWFCdXR0b25SZWNlaXZlcicgbm90IGluIHR4dDoKICAgICAgICByZWMgPSAiXG4gICAgICAgIDxyZWNlaXZlciBhbmRyb2lkOm5hbWU9XCJjb20ucnlhbmhlaXNlLmF1ZGlvc2VydmljZS5NZWRpYUJ1dHRvblJlY2VpdmVyXCIgYW5kcm9pZDpleHBvcnRlZD1cInRydWVcIj5cbiAgICAgICAgICAgIDxpbnRlbnQtZmlsdGVyPlxuICAgICAgICAgICAgICAgIDxhY3Rpb24gYW5kcm9pZDpuYW1lPVwiYW5kcm9pZC5pbnRlbnQuYWN0aW9uLk1FRElBX0JVVFRPTlwiIC8+XG4gICAgICAgICAgICA8L2ludGVudC1maWx0ZXI+XG4gICAgICAgIDwvcmVjZWl2ZXI+XG4gICAgICAgIDxzZXJ2aWNlIGFuZHJvaWQ6bmFtZT1cImNvbS5yeWFuaGVpc2UuYXVkaW9zZXJ2aWNlLkF1ZGlvU2VydmljZVwiIGFuZHJvaWQ6Zm9yZWdyb3VuZFNlcnZpY2VUeXBlPVwibWVkaWFQbGF5YmFja1wiIGFuZHJvaWQ6ZXhwb3J0ZWQ9XCJ0cnVlXCI+XG4gICAgICAgICAgICA8aW50ZW50LWZpbHRlcj5cbiAgICAgICAgICAgICAgICA8YWN0aW9uIGFuZHJvaWQ6bmFtZT1cImFuZHJvaWQubWVkaWEuYnJvd3NlLk1lZGlhQnJvd3NlclNlcnZpY2VcIiAvPlxuICAgICAgICAgICAgPC9pbnRlbnQtZmlsdGVyPlxuICAgICAgICA8L3NlcnZpY2U+XG4gICAgICAgICIKICAgICAgICB0eHQgPSB0eHQucmVwbGFjZSgnPC9hY3Rpdml0eT4nLCAnPC9hY3Rpdml0eT4nICsgcmVjKQogICAgd2l0aCBvcGVuKG1hbmlmZXN0LCAndycsIGVuY29kaW5nPSd1dGYtOCcpIGFzIGY6IGYud3JpdGUodHh0KQ==" | base64 -d > fix_manifest.py
-        python3 fix_manifest.py
+        for lang in uk en es ru de fr pl cs; do echo "{}" > assets/translations/$lang.json; echo "{}" > assets/langs/$lang.json; done       
+        python3 - << 'EOF'
+        import os
+        manifest = "android/app/src/main/AndroidManifest.xml"
+        if os.path.exists(manifest):
+            with open(manifest, 'r', encoding='utf-8') as f:
+                txt = f.read()         
+            perms = ["INTERNET", "WAKE_LOCK", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK"]
+            for p in perms:
+                tag = f'<uses-permission android:name="android.permission.{p}" />'
+                if tag not in txt:
+                    txt = txt.replace('<application', f'    {tag}\n    <application')                   
+            if 'AudioServiceActivity' not in txt:
+                txt = txt.replace('android:name=".MainActivity"', 'android:name="com.ryanheise.audioservice.AudioServiceActivity"')                
+            if 'MediaButtonReceiver' not in txt:
+                rec = """
+                <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MEDIA_BUTTON" />
+                    </intent-filter>
+                </receiver>
+                <service android:name="com.ryanheise.audioservice.AudioService" android:foregroundServiceType="mediaPlayback" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.media.browse.MediaBrowserService" />
+                    </intent-filter>
+                </service>
+                """
+                txt = txt.replace('</activity>', '</activity>\n' + rec)                
+            with open(manifest, 'w', encoding='utf-8') as f:
+                f.write(txt)
+        EOF
     - name: STEP 5 - Native UI Setup
       run: |
         cd ${{ env.FLUTTER_DIR }}
@@ -74,65 +101,987 @@ jobs:
         mkdir -p $RES_DIR/mipmap-xxhdpi $RES_DIR/values
         echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > $RES_DIR/mipmap-xxhdpi/ic_launcher.png
         cp $RES_DIR/mipmap-xxhdpi/ic_launcher.png $RES_DIR/mipmap-xxhdpi/ic_launcher_round.png
-        # Base64 encoded styles.xml
-        echo "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHJlc291cmNlcz4KICAgIDxzdHlsZSBuYW1lPSJMYXVuY2hUaGVtZSIgcGFyZW50PSJAYW5kcm9pZDpzdHlsZS9UaGVtZS5MaWdodC5Ob1RpdGxlQmFyIj4KICAgICAgICA8aXRlbSBuYW1lPSJhbmRyb2lkOndpbmRvd0JhY2tncm91bmQiPkBhbmRyb2lkOmNvbG9yL2JsYWNrPC9pdGVtPgogICAgPC9zdHlsZT4KICAgIDxzdHlsZSBuYW1lPSJOb3JtYWxUaGVtZSIgcGFyZW50PSJAYW5kcm9pZDpzdHlsZS9UaGVtZS5MaWdodC5Ob1RpdGxlQmFyIj4KICAgICAgICA8aXRlbSBuYW1lPSJhbmRyb2lkOndpbmRvd0JhY2tncm91bmQiPkBhbmRyb2lkOmNvbG9yL2JsYWNrPC9pdGVtPgogICAgPC9zdHlsZT4KPC9yZXNvdXJjZXM+" | base64 -d > $RES_DIR/values/styles.xml
+        cat << 'EOF' > $RES_DIR/values/styles.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                <item name="android:windowBackground">@android:color/black</item>
+            </style>
+            <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                <item name="android:windowBackground">@android:color/black</item>
+            </style>
+        </resources>
+        EOF
     - name: STEP 6 - Code Doctor (Safe Init & Bug Fixes)
       run: |
         cd ${{ env.FLUTTER_DIR }}
-        # Base64 encoded Python script for global code fixing
-        echo "aW1wb3J0IG9zLCByZQoKZGVmIGRyaWZ0X3JlcChtKToKICAgIHQgPSBtLmdyb3VwKDEpCiAgICBjID0gbS5ncm91cCgyKQogICAgaWYgJ0NvbXBhbmlvbicgaW4gYzoKICAgICAgICBpZF9tID0gcmUuc2VhcmNoKHInaWQ6XHMqVmFsdWUoKC4qPykpJywgYykKICAgICAgICBpZiBpZF9tOiByZXR1cm4gIihkZWxldGUoIiArIHQgKyAiKS4ud2hlcmUoKHRibCkgPT4gdGJsLmlkLmVxdWFscSgiICsgaWRfbS5ncm91cCgxKSArICIpKSkuZ28oKTsiCiAgICBjID0gYy5yZXBsYWNlKHQgKyAnLicsICd0YmwuJykKICAgIHJldHVybiAiKGRlbGV0ZSgiICsgdCArICIpLi53aGVyZSgodGJsKSA9PiAiICsgYyArICIpKS5nbygpOyIKCmZvciByb290LCBfLCBmaWxlcyBpbiBvcy53YWxrKCdsaWInKToKICAgIGZvciBmIGluIGZpbGVzOgogICAgICAgIGlmIG5vdCBmLmVuZHN3aXRoKCcuZGFydCcpOiBjb250aW51ZQogICAgICAgIHAgPSBvcy5wYXRoLmpvaW4ocm9vdCwgZikKICAgICAgICB3aXRoIG9wZW4ocCwgJ3InLCBlbmNvZGluZz0ndXRmLTgnKSBhcyBmaWxlOiB0eHQgPSBmaWxlLnJlYWQoKQogICAgICAgIG9yaWcgPSB0eHQKICAgICAgICAKICAgICAgICB0eHQgPSB0eHQucmVwbGFjZSgnRGF0YWJhc2VDb25uZWN0aW9uIF9vcGVuQ29ubmVjdGlvbigpJywgJ1F1ZXJ5RXhlY3V0b3IgX29wZW5Db25uZWN0aW9uKCknKQogICAgICAgIHR4dCA9IHR4dC5yZXBsYWNlKCdEYXRhYmFzZUNvbm5lY3Rpb24gb3BlbkNvbm5lY3Rpb24oKScsICdRdWVyeUV4ZWN1dG9yIG9wZW5Db25uZWN0aW9uKCknKQogICAgICAgIHR4dCA9IHR4dC5yZXBsYWNlKCJqc29uWydpc0FkbWluJ10iLCAianNvblsnaXNfYWRtaW4nXSIpCiAgICAgICAgdHh0ID0gcmUuc3ViKHInYm9vbFxzK2dldFxzK2lzQWRtaW5ccyo9PlxzKlteO10rOycsICdib29sIGdldCBpc0FkbWluID0+IHRydWU7JywgdHh0KQogICAgICAgIHR4dCA9IHJlLnN1YihyJ2RlbGV0ZVwoKFthLXpBLVowLTlfXSspXCpcLmRlbGV0ZVwoKC4qPylcKTsnLCBkcmlmdF9yZXAsIHR4dCwgZmxhZ3M9cmUuRE9UQUxMKQogICAgICAgIHR4dCA9IHJlLnN1YihyJ25hdGl2ZTpccyooPzpjb25zdFxzKyk/RHJpZnROYXRpdmVPcHRpb25zXHMqXCguKj9cKVxzKiw/JywgJycsIHR4dCwgZmxhZ3M9cmUuRE9UQUxMKQogICAgICAgIHR4dCA9IHR4dC5yZXBsYWNlKCJlbmFibGVkOiAhX2lzVXBsb2FkaW5nLCIsICIvLyBlbmFibGVkOiAhX2lzVXBsb2FkaW5nLCIpCiAgICAgICAgdHh0ID0gdHh0LnJlcGxhY2UoImFyZ3M6IHsnY29pbnMnOiIsICJuYW1lZEFyZ3M6IHsnY29pbnMnOiIpCiAgICAgICAgdHh0ID0gdHh0LnJlcGxhY2UoImFyZ3M6IHsnY29zdCc6IiwgIm5hbWVkQXJnczogeydjb3N0JzoiKQogICAgICAgIHR4dCA9IHR4dC5yZXBsYWNlKCJjdXJyZW50VHJhY2s6ICgpID0+IGV2ZW50LnRyYWNrIiwgImN1cnJlbnRUcmFjazogZXZlbnQudHJhY2siKQogICAgICAgIHR4dCA9IHR4dC5yZXBsYWNlKCJjdXJyZW50VHJhY2s6ICgpID0+IG51bGwiLCAiY3VycmVudFRyYWNrOiBudWxsIikKICAgICAgICB0eHQgPSB0eHQucmVwbGFjZSgicXVlcnkgPSBxdWVyeS5lcSgnZ2VucmUnLCBnZW5yZSk7IiwgIi8vIGVxIikKICAgICAgICB0eHQgPSB0eHQucmVwbGFjZSgicXVlcnkgPSBxdWVyeS5vcigndGl0bGUuaWxpa2UuJSRzZWFyY2hRdWVyeSUsYXJ0aXN0LmlsaWtlLiQkc2VhcmNoUXVlcnklJyk7IiwgIi8vIG9yIikKICAgICAgICB0eHQgPSB0eHQucmVwbGFjZSgiLm9yKCdhbmQoc2VuZGVyX2lkLmVxLiR7Y3VycmVudFVzZXI/LmlkfSxyZWNlaXZlcl9pZC5lcS4kb3RoZXJVc2VySWQpLGFuZChzZW5kZXJfaWQuZXEuJG90aGVyVXNlcklkLHJlY2VpdmVyX2lkLmVxLiR7Y3VycmVudFVzZXI/LmlkfSknKSIsICIiKQogICAgICAgIAogICAgICAgIGlmIG9yaWcgIT0gdHh0OgogICAgICAgICAgICB3aXRoIG9wZW4ocCwgJ3cnLCBlbmNvZGluZz0ndXRmLTgnKSBhcyBmaWxlOiBmaWxlLndyaXRlKHR4dCkKCmZvciByb290LCBfLCBmaWxlcyBpbiBvcy53YWxrKCdhbmRyb2lkL2FwcC9zcmMvbWFpbicpOgogICAgZm9yIGYgaW4gZmlsZXM6CiAgICAgICAgaWYgZiBpbiBbJ01haW5BY3Rpdml0eS5rdCcsICdNYWluQWN0aXZpdHkuamF2YSddOgogICAgICAgICAgICBwID0gb3MucGF0aC5qb2luKHJvb3QsIGYpCiAgICAgICAgICAgIHdpdGggb3BlbihwLCAncicsIGVuY29kaW5nPSd1dGYtOCcpIGFzIGZpbGU6IHR4dCA9IGZpbGUucmVhZCgpCiAgICAgICAgICAgIHBrZ19tYXRjaCA9IHJlLnNlYXJjaChyJ3BhY2thZ2VccysoW2EtekEtWjAtOV9cLitdKyknLCB0eHQpCiAgICAgICAgICAgIHBrZ19uYW1lID0gcGtnX21hdGNoLmdyb3VwKDEpIGlmIHBrZ19tYXRjaCBlbHNlICJjb20ub3BlbndhdmUuYXBwIgogICAgICAgICAgICBpZiBmID09ICdNYWluQWN0aXZpdHkua3QnOgogICAgICAgICAgICAgICAgY2xlYW5fY29kZSA9ICJwYWNrYWdlICIgKyBwa2dfbmFtZSArICJcblxuaW1wb3J0IGlvLmZsdXR0ZXIuZW1iZWRkaW5nLmFuZHJvaWQuRmx1dHRlckFjdGl2aXR5XG5pbXBvcnQgY29tLnJ5YW5oZWlzZS5hdWRpb3NlcnZpY2UuQXVkaW9TZXJ2aWNlQWN0aXZpdHlcblxuY2xhc3MgTWFpbkFjdGl2aXR5OiBBdWRpb1NlcnZpY2VBY3Rpdml0eSgpIHtcbn1cbiIKICAgICAgICAgICAgZWxzZToKICAgICAgICAgICAgICAgIGNsZWFuX2NvZGUgPSAicGFja2FnZSAiICsgcGtnX25hbWUgKyAiO1xuXG5pbXBvcnQgaW8uZmx1dHRlci5lbWJlZGRpbmcuYW5kcm9pZC5GbHV0dGVyQWN0aXZpdHk7XG5pbXBvcnQgY29tLnJ5YW5oZWlzZS5hdWRpb3NlcnZpY2UuQXVkaW9TZXJ2aWNlQWN0aXZpdHk7XG5cbnB1YmxpYyBjbGFzcyBNYWluQWN0aXZpdHkgZXh0ZW5kcyBBdWRpb1NlcnZpY2VBY3Rpdml0eSB7XG59XG4iCiAgICAgICAgICAgIHdpdGggb3BlbihwLCAndycsIGVuY29kaW5nPSd1dGYtOCcpIGFzIGZpbGU6IGZpbGUud3JpdGUoY2xlYW5fY29kZSk=" | base64 -d > fix_app.py
+        cat << 'EOF' > fix_app.py
+        import os, re
+        def drift_rep(m):
+            t = m.group(1)
+            c = m.group(2)
+            if 'Companion' in c:
+                id_m = re.search(r'id:\s*Value\((.*?)\)', c)
+                if id_m: return "(delete(" + t + ")..where((tbl) => tbl.id.equals(" + id_m.group(1) + "))).go();"
+            c = c.replace(t + '.', 'tbl.')
+            return "(delete(" + t + ")..where((tbl) => " + c + ")).go();"
+        for root, _, files in os.walk('lib'):
+            for f in files:
+                if not f.endswith('.dart'): continue
+                p = os.path.join(root, f)
+                with open(p, 'r', encoding='utf-8') as file: txt = file.read()
+                orig = txt                
+                txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
+                txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
+                txt = txt.replace("json['isAdmin']", "json['is_admin']")
+                txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)               
+                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\(.*?\)\s*,?', '', txt, flags=re.DOTALL)                
+                txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
+                txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
+                txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
+                txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
+                txt = txt.replace("currentTrack: () => null", "currentTrack: null")
+                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
+                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
+                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")                
+                if orig != txt:
+                    with open(p, 'w', encoding='utf-8') as file: file.write(txt)
+        for root, _, files in os.walk('android/app/src/main'):
+            for f in files:
+                if f in ['MainActivity.kt', 'MainActivity.java']:
+                    p = os.path.join(root, f)
+                    with open(p, 'r', encoding='utf-8') as file: txt = file.read()
+                    pkg_match = re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt)
+                    pkg_name = pkg_match.group(1) if pkg_match else "com.openwave.app"
+                    
+                    if f == 'MainActivity.kt':
+                        clean_code = "package " + pkg_name + "\n\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\n\nclass MainActivity: AudioServiceActivity() {\n}\n"
+                    else:
+                        clean_code = "package " + pkg_name + ";\n\nimport io.flutter.embedding.android.FlutterActivity;\nimport com.ryanheise.audioservice.AudioServiceActivity;\n\npublic class MainActivity extends AudioServiceActivity {\n}\n"
+                    with open(p, 'w', encoding='utf-8') as file: file.write(clean_code)
+        EOF
         python3 fix_app.py
-    - name: STEP 7 - Inject Gamification & Extra Screens (Base64)
+    - name: STEP 7 - Restore Radio, Gamification & Chat
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p lib/features/gamification/presentation/screens
         mkdir -p lib/features/radio/presentation/screens
-        mkdir -p lib/features/chat/presentation/screens
-        mkdir -p lib/features/auth/presentation/screens    
-        # Daily Reward Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAnZGFydDptYXRoJzsKCmNsYXNzIERhaWx5UmV3YXJkU2NyZWVuIGV4dGVuZHMgU3RhdGVmdWxXaWRnZXQgewogIGNvbnN0IERhaWx5UmV3YXJkU2NyZWVuKHtzdXBlci5rZXl9KTsKICBAb3ZlcnJpZGUKICBTdGF0ZTxEYWlseVJld2FyZFNjcmVlbj4gY3JlYXRlU3RhdGUoKSA9PiBfRGFpbHlSZXdhcmRTY3JlZW5TdGF0ZSgpOwp9CgpjbGFzcyBfRGFpbHlSZXdhcmRTY3JlZW5TdGF0ZSBleHRlbmRzIFN0YXRlPERhaWx5UmV3YXJkU2NyZWVuPiB7CiAgYm9vbCBfY2xhaW1lZCA9IGZhbHNlOwogIGludCBfcmV3YXJkID0gMDsKCiAgdm9pZCBfY2xhaW1SZXdhcmQoKSB7CiAgICBzZXRTdGF0ZSgoKSB7CiAgICAgIF9yZXdhcmQgPSBSYW5kb20oKS5uZXh0SW50KDQxKSArIDEwOwogICAgICBfY2xhaW1lZCA9IHRydWU7CiAgICB9KTsKICB9CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgcmV0dXJuIFNjYWZmb2xkKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgYXBwQmFyOiBBcHBCYXIoCiAgICAgICAgdGl0bGU6IGNvbnN0IFRleHQoJ9Cp0L7QtNC10L3QvdCwINCd0LDQs9C+0YDQvtC00DAnLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgICBpY29uVGhlbWU6IGNvbnN0IEljb25UaGVtZURhdGEoY29sb3I6IENvbG9ycy53aGl0ZSksCiAgICAgICksCiAgICAgIGJvZHk6IENlbnRlcigKICAgICAgICBjaGlsZDogQ29sdW1uKAogICAgICAgICAgbWFpbkF4aXNBbGlnbm1lbnQ6IE1haW5BeGlzQWxpZ25tZW50LmNlbnRlciwKICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgIEljb24oCiAgICAgICAgICAgICAgSWNvbnMuY2FyZF9naWZ0Y2FyZCwKICAgICAgICAgICAgICBzaXplOiAxMjAsCiAgICAgICAgICAgICAgY29sb3I6IF9jbGFpbWVkID8gQ29sb3JzLmdyZXkgOiBDb2xvcnMub3JhbmdlLAogICAgICAgICAgICApLAogICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDIwKSwKICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICBfY2xhaW1lZCA/ICfQktC4INC+0YLRgNC40LzQsNC70LggJF9yZXdhcmQg0LzQvtC90LXRgiEnIDogJ9CS0LDRiCDQv9C+0LTQsNGA0YPQvdC+0Log0YfQtdC60LDRlSEnLAogICAgICAgICAgICAgIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoZm9udFNpemU6IDI0LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0LmJvbGQsIGNvbG9yOiBDb2xvcnMud2hpdGUpLAogICAgICAgICAgICApLAogICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDQwKSwKICAgICAgICAgICAgRWxldmF0ZWRCdXR0b24oCiAgICAgICAgICAgICAgc3R5bGU6IEVsZXZhdGVkQnV0dG9uLnN0eWxlRnJvbSgKICAgICAgICAgICAgICAgIGJhY2tncm91bmRDb2xvcjogX2NsYWltZWQgPyBDb2xvcnMuZ3JleSA6IENvbG9ycy5vcmFuZ2UsCiAgICAgICAgICAgICAgICBwYWRkaW5nOiBjb25zdCBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiA0MCwgdmVydGljYWw6IDE1KSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICAgIG9uUHJlc3NlZDogX2NsYWltZWQgPyBudWxsIDogX2NsYWltUmV3YXJkLAogICAgICAgICAgICAgIGNoaWxkOiBUZXh0KAogICAgICAgICAgICAgICAgX2NsYWltZWQgPyAn0J/QvtCy0LXRgNC90YPRgtC40YHRjyDQt9Cw0LLRgtGA0DAnIDogJ9CS0ZbQtNC60YDQuNGC0LgnLAogICAgICAgICAgICAgICAgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICApLAogICAgICAgICAgXSwKICAgICAgICApLAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > lib/features/gamification/presentation/screens/daily_reward_screen.dart
-        # Spin Wheel Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAnZGFydDptYXRoJzsKCmNsYXNzIFNwaW5XaGVlbFNjcmVlbiBleHRlbmRzIFN0YXRlZnVsV2lkZ2V0IHsKICBjb25zdCBTcGluV2hlZWxTY3JlZW4oe3N1cGVyLmtleX0pOwogIEBvdmVycmlkZQogIFN0YXRlPFNwaW5XaGVlbFNjcmVlbj4gY3JlYXRlU3RhdGUoKSA9PiBfU3BpbldoZWVsU2NyZWVuU3RhdGUoKTsKfQoKY2xhc3MgX1NwaW5XaGVlbFNjcmVlblN0YXRlIGV4dGVuZHMgU3RhdGU8U3BpbldoZWVsU2NyZWVuPiB3aXRoIFNpbmdsZVRpY2tlclByb3ZpZGVyU3RhdGVNaXhpbiB7CiAgbGF0ZSBBbmltYXRpb25Db250cm9sbGVyIF9jdHJsOwogIGJvb2wgX3NwaW5uaW5nID0gZmFsc2U7CgogIEBvdmVycmlkZQogIHZvaWQgaW5pdFN0YXRlKCkgewogICAgc3VwZXIuaW5pdFN0YXRlKCk7CiAgICBfY3RybCA9IEFuaW1hdGlvbkNvbnRyb2xsZXIodnN5bmM6IHRoaXMsIGR1cmF0aW9uOiBjb25zdCBEdXJhdGlvbihzZWNvbmRzOiAzKSk7CiAgfQoKICBAb3ZlcnJpZGUKICB2b2lkIGRpc3Bvc2UoKSB7CiAgICBfY3RybC5kaXNwb3NlKCk7CiAgICBzdXBlci5kaXNwb3NlKCk7CiAgfQoKICB2b2lkIF9zcGluKCkgewogICAgaWYgKF9zcGlubmluZykgcmV0dXJuOwogICAgc2V0U3RhdGUoKCkgPT4gX3NwaW5uaW5nID0gdHJ1ZSk7CiAgICBfY3RybC5yZXNldCgpOwogICAgX2N0cmwuYW5pbWF0ZVRvKFJhbmRvbSgpLm5leHREb3VibGUoKSAqIDUgKyA1LCBjdXJ2ZTogQ3VydmVzLmRlY2VsZXJhdGUpLnRoZW4oKF8pIHsKICAgICAgc2V0U3RhdGUoKCkgPT4gX3NwaW5uaW5nID0gZmFsc2UpOwogICAgICBTY2FmZm9sZE1lc3Nlbmdlci5vZihjb250ZXh0KS5zaG93U25hY2tCYXIoY29uc3QgU25hY2tCYXIoY29udGVudDogVGV4dCgn0JLQuCDQstC40LPRgNCw0LvQuCDQv9GA0LjQtyEnKSkpOwogICAgfSk7CiAgfQoKICBAb3ZlcnJpZGUKICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHsKICAgIHJldHVybiBTY2FmZm9sZCgKICAgICAgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssCiAgICAgIGFwcEJhcjogQXBwQmFyKAogICAgICAgIHRpdGxlOiBjb25zdCBUZXh0KCfQmtC+0LvQtdGB0L4g0KTQvtGA0YLRg9C90LgnLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgICBpY29uVGhlbWU6IGNvbnN0IEljb25UaGVtZURhdGEoY29sb3I6IENvbG9ycy53aGl0ZSksCiAgICAgICksCiAgICAgIGJvZHk6IENlbnRlcigKICAgICAgICBjaGlsZDogQ29sdW1uKAogICAgICAgICAgbWFpbkF4aXNBbGlnbm1lbnQ6IE1haW5BeGlzQWxpZ25tZW50LmNlbnRlciwKICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgIFJvdGF0aW9uVHJhbnNpdGlvbigKICAgICAgICAgICAgICB0dXJuczogX2N0cmwsCiAgICAgICAgICAgICAgY2hpbGQ6IENvbnRhaW5lcigKICAgICAgICAgICAgICAgIHdpZHRoOiAzMDAsCiAgICAgICAgICAgICAgICBoZWlnaHQ6IDMwMCwKICAgICAgICAgICAgICAgIGRlY29yYXRpb246IEJveERlY29yYXRpb24oCiAgICAgICAgICAgICAgICAgIHNoYXBlOiBCb3hTaGFwZS5jaXJjbGUsCiAgICAgICAgICAgICAgICAgIGdyYWRpZW50OiBjb25zdCBTd2VlcEdyYWRpZW50KAogICAgICAgICAgICAgICAgICAgIGNvbG9yczogW0NvbG9ycy5yZWQsIENvbG9ycy5ibHVlLCBDb2xvcnMuZ3JlZW4sIENvbG9ycy55ZWxsb3csIENvbG9ycy5yZWRdLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IENvbG9ycy53aGl0ZSwgd2lkdGg6IDUpLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgIGNoaWxkOiBjb25zdCBDZW50ZXIoCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KCfQmtCg0KPQotCY0KLQmCcsIHN0eWxlOiBUZXh0U3R5bGUoZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBmb250U2l6ZTogMzAsIGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgKSwKICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiA1MCksCiAgICAgICAgICAgIEVsZXZhdGVkQnV0dG9uKAogICAgICAgICAgICAgIHN0eWxlOiBFbGV2YXRlZEJ1dHRvbi5zdHlsZUZyb20oCiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IGNvbnN0IENvbG9yKDB4RkY2QzYzRkYpLAogICAgICAgICAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5zeW1tZXRyaWMoaG9yaXpvbnRhbDogNTAsIHZlcnRpY2FsOiAyMCksCiAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICBvblByZXNzZWQ6IF9zcGlubmluZyA/IG51bGwgOiBfc3BpbiwKICAgICAgICAgICAgICBjaGlsZDogY29uc3QgVGV4dCgn0JfQkNCf0KPQodCi0JjQotCYJywgc3R5bGU6IFRleHRTdHlsZShmb250U2l6ZTogMjAsIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCwgY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgICAgICApLAogICAgICAgICAgXSwKICAgICAgICApLAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
-        # Achievements Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CgpjbGFzcyBBY2hpZXZlbWVudHNTY3JlZW4gZXh0ZW5kcyBTdGF0ZWxlc3NXaWRnZXQgewogIGNvbnN0IEFjaGlldmVtZW50c1NjcmVlbih7c3VwZXIua2V5fSk7CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgcmV0dXJuIFNjYWZmb2xkKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgYXBwQmFyOiBBcHBCYXIoCiAgICAgICAgdGl0bGU6IGNvbnN0IFRleHQoJ9CU0L7RgdGP0LPQvdC10L3QvdGPJywgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgICAgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssCiAgICAgICAgaWNvblRoZW1lOiBjb25zdCBJY29uVGhlbWVEYXRhKGNvbG9yOiBDb2xvcnMud2hpdGUpLAogICAgICApLAogICAgICBib2R5OiBMaXN0VmlldygKICAgICAgICBwYWRkaW5nOiBjb25zdCBFZGdlSW5zZXRzLmFsbCgxNiksCiAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgIF9idWlsZEJhZGdlKEljb25zLmhlYWRwaG9uZXMsICfQodC70YPRhdCw0Yct0L/QvtGH0LDRgtC60ZbQstC10YbRjCcsICfQn9C+0YHQu9GD0YXQsNC50YLQtSAxMCDRgtGA0LXQutGW0LInLCB0cnVlKSwKICAgICAgICAgIF9idWlsZEJhZGdlKEljb25zLnBsYXlsaXN0X2FkZF9jaGVjaywgJ9Ca0YPRgNCw0YLQvtGAJywgJ9Ch0YLQstC+0YDRltGC0Ywg0YHQstGW0Lkg0L/QtdGA0YjQuNC5INC/0LvQtdC50LvQuNGB0YInLCB0cnVlKSwKICAgICAgICAgIF9idWlsZEJhZGdlKEljb25zLnN0YXIsICfQodGD0L/QtdGgLWTQsNC9JywgJ9Ce0YLRgNC40LzQsNC50YLQtSAxMDAwINC+0YfQvtC6JywgZmFsc2UpLAogICAgICAgICAgX2J1aWxkQmFkZ2UoSWNvbnMucmFkaW8sICfQoNCw0LTRltC+LdC80LDQvdGW0Y/QuicsICfQodC70YPRhdCw0LnRgtC1INGA0LDQtNGW0L4gNSDQs9C+0LTQuNC9INC/0L7RgdC/0ZbQu9GMJywgZmFsc2UpLAogICAgICAgIF0sCiAgICAgICksCiAgICApOwogIH0KCiAgV2lkZ2V0IF9idWlsZEJhZGdlKEljb25EYXRhIGljb24sIFN0cmluZyB0aXRsZSwgU3RyaW5nIGRlc2MsIGJvb2wgdW5sb2NrZWQpIHsKICAgIHJldHVybiBDYXJkKAogICAgICBjb2xvcjogdW5sb2NrZWQgPyBjb25zdCBDb2xvcigweEZGMUUxRTJDKSA6IENvbG9ycy53aGl0ZTEwLAogICAgICBtYXJnaW46IGNvbnN0IEVkZ2VJbnNldHMub25seShib3R0b206IDEyKSwKICAgICAgY2hpbGQ6IExpc3RUaWxlKAogICAgICAgIGxlYWRpbmc6IEljb24oaWNvbiwgY29sb3I6IHVubG9ja2VkID8gQ29sb3JzLmFtYmVyIDogQ29sb3JzLmdyZXksIHNpemU6IDQwKSwKICAgICAgICB0aXRsZTogVGV4dCh0aXRsZSwgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogdW5sb2NrZWQgPyBDb2xvcnMud2hpdGUgOiBDb2xvcnMuZ3JleSwgZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkKSksCiAgICAgICAgc3VidGl0bGU6IFRleHQoZGVzYywgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogdW5sb2NrZWQgPyBDb2xvcnMuZ3JleSA6IENvbG9ycy5ncmV5LndpdGhPcGFjaXR5KDAuNSkpKSwKICAgICAgICB0cmFpbGluZzogdW5sb2NrZWQgPyBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5jaGVja19jaXJjbGUsIGNvbG9yOiBDb2xvcnMuZ3JlZW4pIDogY29uc3QgSWNvbjxJY29uRGF0YT4oSWNvbnMubG9jaywgY29sb3I6IENvbG9ycy5ncmV5KSwKICAgICAgKSwKICAgICk7CiAgfQp9" | base64 -d > lib/features/gamification/presentation/screens/achievements_screen.dart
-        # Radio Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL3NlcnZpY2VzL3N1cGFiYXNlX3NlcnZpY2UuZGFydCc7CgpjbGFzcyBSYWRpb1NjcmVlbiBleHRlbmRzIFN0YXRlbGVzc1dpZGdldCB7CiAgY29uc3QgUmFkaW9TY3JlZW4oe3N1cGVyLmtleX0pOwoKICBAb3ZlcnJpZGUKICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHsKICAgIHJldHVybiBTY2FmZm9sZCgKICAgICAgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssCiAgICAgIGFwcEJhcjogQXBwQmFyKAogICAgICAgIHRpdGxlOiBjb25zdCBUZXh0KCdPcGVuV2F2ZSDQoNCw0LTRltC+Jywgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgICAgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssCiAgICAgICAgaWNvblRoZW1lOiBjb25zdCBJY29uVGhlbWVEYXRhKGNvbG9yOiBDb2xvcnMud2hpdGUpLAogICAgICApLAogICAgICBib2R5OiBDZW50ZXIoCiAgICAgICAgY2hpbGQ6IENvbHVtbigKICAgICAgICAgIG1haW5BeGlzQWxpZ25tZW50OiBNYWluQXhpc0FsaWdubWVudC5jZW50ZXIsCiAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICBDb250YWluZXIoCiAgICAgICAgICAgICAqd2lkdGg6IDIwMCwKICAgICAgICAgICAgICBoZWlnaHQ6IDIwMCwKICAgICAgICAgICAgICBkZWNvcmF0aW9uOiBCb3hEZWNvcmF0aW9uKAogICAgICAgICAgICAgICAgc2hhcGU6IEJveFNoYXBlLmNpcmNsZSwKICAgICAgICAgICAgICAgIGdyYWRpZW50OiBjb25zdCBTd2VlcEdyYWRpZW50KGNvbG9yczogW0NvbG9yKDB4RkY2QzYzRkYpLCBDb2xvcnMucHVycGxlLCBDb2xvcigweEZGNkM2M0ZGKV0pLAogICAgICAgICAgICAgICAgYm94U2hhZG93OiBbQm94U2hhZG93KGNvbG9yOiBjb25zdCBDb2xvcigweEZGNkM2M0ZGKS53aXRoT3BhY2l0eSgwLjUpLCBibHVyUmFkaXVzOiAzMCwgc3ByZWFkUmFkaXVzOiAxMCldLAogICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgY2hpbGQ6IGNvbnN0IENlbnRlcihjaGlsZDogSWNvbihJY29ucy5yYWRpbywgc2l6ZTogODAsIGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICAgICAgKSwKICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiA0MCksCiAgICAgICAgICAgIGNvbnN0IFRleHQoJ0xJVkUgUkFESU8nLCBzdHlsZTogVGV4dFN0eWxlKGZvbnRTaXplOiAyNCwgZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBsZXR0ZXJTcGFjaW5nOiAyLCBjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogMTApLAogICAgICAgICAgICBjb25zdCBUZXh0KCfQodC70YPRhdCw0LnRgtC1INC90LDQudC60YDQsNGJ0LUg0Lcg0L3QsNC80LgnLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMuZ3JleSkpLAogICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDQwKSwKICAgICAgICAgICAgSWNvbkJ1dHRvbigKICAgICAgICAgICAgICBpY29uU2l6ZTogODAsCiAgICAgICAgICAgICAgaWNvbjogY29uc3QgSWNvbihJY29ucy5wbGF5X2NpcmNsZV9maWxsLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLAogICAgICAgICAgICAgIG9uUHJlc3NlZDogKCkgPT4gU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKGNvbnN0IFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ9Cf0ZbQtNC60LvRjtGH0LXQvdC90Y8g0LTQviDQtdGE0ZbRgNGPLi4uJykpKSwKICAgICAgICAgICAgKSwKICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiA0MCksCiAgICAgICAgICAgIEZ1dHVyZUJ1aWxkZXI8Ym9vbD4oCiAgICAgICAgICAgICAgZnV0dXJlOiBTdXBhYmFzZVNlcnZpY2UoKS5pc0FkbWluKCksCiAgICAgICAgICAgICAgYnVpbGRlcjogKGNvbnRleHQsIHNuYXBzaG90KSB7CiAgICAgICAgICAgICAgICBpZiAoc25hcHNob3QuZGF0YSA9PSB0cnVlKSB7CiAgICAgICAgICAgICAgICAgIHJldHVybiBFbGV2YXRlZEJ1dHRvbi5pY29uKAogICAgICAgICAgICAgICAgICAgIHN0eWxlOiBFbGV2YXRlZEJ1dHRvbi5zdHlsZUZyb20oYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuZ3JlZW4pLAogICAgICAgICAgICAgICAgICAgIGljb246IGNvbnN0IEljb24oSWNvbnMudXBsb2FkLCBjb2xvcjogQ29sb3JzLndoaXRlKSwKICAgICAgICAgICAgICAgICAgICBsYWJlbDogY29uc3QgVGV4dCgn0JfQsNCy0LDQvdGC0LDQttC40YLQuCDQsiDQtdGE0ZbRgCAo0JDQtNC80ZbQvSknLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICAgICAgICAgICAgICBvblByZXNzZWQ6ICgpID0+IFNjYWZmb2xkTWVzc2VuZ2VyLm9mKGNvbnRleHQpLnNob3dTbmFja0Jhcihjb25zdCBTbmFja0Jhcihjb250ZW50OiBUZXh0KCfQn9Cw0L/QutCwIHJhZGlvX3RyYWNrcyDQs9C+0YLQvtCy0LAnKSkpLAogICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgcmV0dXJuIGNvbnN0IFNpemVkQm94LnNocmluaygpOwogICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICkKICAgICAgICAgIF0sCiAgICAgICAgKSwKICAgICAgKSwKICAgICk7CiAgfQp9" | base64 -d > lib/features/radio/presentation/screens/radio_screen.dart
-        # Chat Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CgpjbGFzcyBDaGF0TGlzdFNjcmVlbiBleHRlbmRzIFN0YXRlbGVzc1dpZGdldCB7CiAgY29uc3QgQ2hhdExpc3RTY3JlZW4oe3N1cGVyLmtleX0pOwoKICBAb3ZlcnJpZGUKICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHsKICAgIHJldHVybiBTY2FmZm9sZCgKICAgICAgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssCiAgICAgIGFwcEJhcjogQXBwQmFyKAogICAgICAgIHRpdGxlOiBjb25zdCBUZXh0KCfQn+C+0LLRltC00L7QvNC70LXQvdC90Y8nLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgICBpY29uVGhlbWU6IGNvbnN0IEljb25UaGVtZURhdGEoY29sb3I6IENvbG9ycy53aGl0ZSksCiAgICAgICksCiAgICAgIGJvZHk6IExpc3RWaWV3KAogICAgICAgIHBhZGRpbmc6IGNvbnN0IEVkZ2VJbnNldHMuYWxsKDE2KSwKICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgTGlzdFRpbGUoCiAgICAgICAgICAgIGxlYWRpbmc6IGNvbnN0IENpcmNsZUF2YXRhcihiYWNrZ3JvdW5kQ29sb3I6IENvbG9yKDB4RkY2QzYzRkYpLCBjaGlsZDogSWNvbihJY29ucy5zdXBwb3J0X2FnZW50LCBjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgICAgICAgIHRpdGxlOiBjb25zdCBUZXh0KCfQotC10YXQvdGW0YfQvdCwINC/0ZbQtNGC0YDQuNC80LrQsCAvINCQ0LTQvNGW0L0nLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUsIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCkpLAogICAgICAgICAgICBzdWJ0aXRsZTogY29uc3QgVGV4dCgn0J/RgNC40LLRltGCIiDQp9C40Lwg0LzQvtC20LXQvNC+INC00L7Qv9C+0LzQvtCz0YLQuD8nLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMuZ3JleSkpLAogICAgICAgICAgICBvblRhcDogKCkgPT4gU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKGNvbnN0IFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ9Cp0LDRgiDQsiDRgNC+0LfRgNC+0LHRhtGWIicpKSwKICAgICAgICAgICksCiAgICAgICAgXSwKICAgICAgKSwKICAgICk7CiAgfQp9" | base64 -d > lib/features/chat/presentation/screens/chat_list_screen.dart
-        # Auth Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpzdXBhYmFzZV9mbHV0dGVyL3N1cGFiYXNlX2ZsdXR0ZXIuZGFydCc7CgpjbGFzcyBTaW1wbGVBdXRoU2NyZWVuIGV4dGVuZHMgU3RhdGVmdWxXaWRnZXQgewogIGNvbnN0IFNpbXBsZUF1dGhTY3JlZW4oe3N1cGVyLmtleX0pOwogIEBvdmVycmlkZSBTdGF0ZTxTaW1wbGVBdXRoU2NyZWVuPiBjcmVhdGVTdGF0ZSgpID0+IF9TaW1wbGVBdXRoU2NyZWVuU3RhdGUoKTsKfQoKY2xhc3MgX1NpbXBsZUF1dGhTY3JlZW5TdGF0ZSBleHRlbmRzIFN0YXRlPFNpbXBsZUF1dGhTY3JlZW4+IHsKICBib29sIF9pc0xvZ2luID0gdHJ1ZTsKICBib29sIF9sb2FkaW5nID0gZmFsc2U7CiAgZmluYWwgX2VtYWlsQ29udHJvbGxlciA9IFRleHRFZGl0aW5nQ29udHJvbGxlcigpOwogIGZpbmFsIF9wYXNzd29yZENvbnRyb2xsZXIgPSBUZXh0RWRpdGluZ0NvbnRyb2xsZXIoKTsKCiAgRnV0dXJlPHZvaWQ+IF9zdWJtaXQoKSBhc3luYyB7CiAgICBzZXRTdGF0ZSgoKSA9PiBfbG9hZGluZyA9IHRydWUpOwogICAgdHJ5IHsKICAgICAgaWYgKF9pc0xvZ2luKSB7CiAgICAgICAgYXdhaXQgU3VwYWJhc2UuaW5zdGFuY2UuY2xpZW50LmF1dGguc2lnbkluV2l0aFBhc3N3b3JkKAogICAgICAgICAgZW1haWw6IF9lbWFpbENvbnRyb2xsZXIudGV4dC50cmltKCksCiAgICAgICAgICBwYXNzd29yZDogX3Bhc3N3b3JkQ29udHJvbGxlci50ZXh0LnRyaW0oKSwKICAgICAgICApOwogICAgICB9IGVsc2UgewogICAgICAgIGF3YWl0IFN1cGFiYXNlLmluc3RhbmNlLmNsaWVudC5hdXRoLnNpZ25VcCgKICAgICAgICAgIGVtYWlsOiBfZW1haWxDb250cm9sbGVyLnRleHQudHJpbSgpLAogICAgICAgICAgcGFzc3dvcmQ6IF9wYXNzd29yZENvbnRyb2xsZXIudGV4dC50cmltKCksCiAgICAgICAgKTsKICAgICAgICBpZiAobW91bnRlZCkgU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKGNvbnN0IFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ9Cg0LXRlSGBgtGA0LDRhtGW0Y8g0YPRgdC/0ZbRiNC90LAhIFLRtdC/0LXRgCDRg9Cy0ZbQudC00ZbRgtGMLicpKSk7CiAgICAgICAgc2V0U3RhdGUoKCkgPT4gX2lzTG9naW4gPSB0cnVlKTsKICAgICAgfQogICAgfSBjYXRjaCAoZSkgewogICAgICBpZiAobW91bnRlZCkgU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ9Cf0L7QvNC40LvQutCwOiAke2UudG9TdHJpbmcoKS5zcGxpdCgnXSAnKS5sYXN0fScpLCBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5yZWRBY2NlbnQpKTsKICAgIH0KICAgIGlmIChtb3VudGVkKSBzZXRTdGF0ZSgoKSA9PiBfbG9hZGluZyA9IGZhbHNlKTsKICB9CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgcmV0dXJuIFNjYWZmb2xkKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgYm9keTogQ2VudGVyKAogICAgICAgIGNoaWxkOiBTaW5nbGVDaGlsZFNjcm9sbFZpZXcoCiAgICAgICAgICBwYWRkaW5nOiBjb25zdCBFZGdlSW5zZXRzLmFsbCgyNCksCiAgICAgICAgICBjaGlsZDogQ29sdW1uKAogICAgICAgICAgICBtYWluQXhpc0FsaWdubWVudDogTWFpbkF4aXNBbGlnbm1lbnQuY2VudGVyLAogICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgIGNvbnN0IEljb24oSWNvbnMud2F2ZXMsIHNpemU6IDgwLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLAogICAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogMjApLAogICAgICAgICAgICAgIFRleHQoX2lzTG9naW4gPyAn0JLRhdGW0LQg0LIgT3BlbldhdmUnIDogJ9Ch0YLQstC+0YDQtdC90L3RjyDQsNC60LDRg9C90YLRgycsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoZm9udFNpemU6IDI4LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0LmJvbGQsIGNvbG9yOiBDb2xvcnMud2hpdGUpKSwKICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDQwKSwKICAgICAgICAgICAgICBUZXh0RmllbGQoY29udHJvbGxlcjogX2VtYWlsQ29udHJvbGxlciwgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSwgZGVjb3JhdGlvbjogSW5wdXREZWNvcmF0aW9uKGhpbnRUZXh0OiAnRW1haWwnLCBoaW50U3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLmdyZXkpLCBmaWxsZWQ6IHRydWUsIGZpbGxDb2xvcjogY29uc3QgQ29sb3IoMHhGRjFFMUUyQyksIGJvcmRlcjogT3V0bGluZUlucHV0Qm9yZGVyKGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDEyKSwgYm9yZGVyU2lkZTogQm9yZGVyU2lkZS5ub25lKSkpLAogICAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogMTYpLAogICAgICAgICAgICAgIFRleHRGaWVsZChjb250cm9sbGVyOiBfcGFzc3dvcmRDb250cm9sbGVyLCBvYnNjdXJlVGV4dDogdHJ1ZSwgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSwgZGVjb3JhdGlvbjogSW5wdXREZWNvcmF0aW9uKGhpbnRUZXh0OiAn0J/QsNGA0L7Qu9GMJywgaGludFN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5ncmV5KSwgZmlsbGVkOiB0cnVlLCBmaWxsQ29sb3I6IGNvbnN0IENvbG9yKDB4RkYxRTFFMkMpLCBib3JkZXI6IE91dGxpbmVJbnB1dEJvcmRlcihib3JkZXJSYWRpdXM6IEJvcmRlclJhZGl1cy5jaXJjdWxhcigxMiksIGJvcmRlclNpZGU6IEJvcmRlclNpZGUubm9uZSkpKSwKICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDMyKSwKICAgICAgICAgICAgICBTaXplZEJveCgKICAgICAgICAgICAgICAgIHdpZHRoOiBkb3VibGUuaW5maW5pdHksCiAgICAgICAgICAgICAgICBoZWlnaHQ6IDUwLAogICAgICAgICAgICAgICAgY2hpbGQ6IEVsZXZhdGVkQnV0dG9uKAogICAgICAgICAgICAgICAgICBzdHlsZTogRWxldmF0ZWRCdXR0b24uc3R5bGVGcm9tKGJhY2tncm91bmRDb2xvcjogY29uc3QgQ29sb3IoMHhGRjZDNjNGRiksIHNoYXBlOiBSb3VuZGVkUmVjdGFuZ2xlQm9yZGVyKGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDEyKSkpLAogICAgICAgICAgICAgICAgICBvblByZXNzZWQ6IF9sb2FkaW5nID8gbnVsbCA6IF9zdWJtaXQsCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBfbG9hZGluZyA/IGNvbnN0IENpcmN1bGFyUHJvZ3Jlc3NJbmRpY2F0b3IoY29sb3I6IENvbG9ycy53aGl0ZSkgOiBUZXh0KF9pc0xvZ2luID8gJ1PQstGW0LnRgtC4JyA6ICfQl9Cw0YDQtdGN0YHRgtGA0YPQstCw0YLQuNGB0Y8nLCBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGZvbnRTaXplOiAxNiwgZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAxNiksCiAgICAgICAgICAgICAgVGV4dEJ1dHRvbigKICAgICAgICAgICAgICAgIG9uUHJlc3NlZDogKCkgPT4gc2V0U3RhdGUoKCkgPT4gX2lzTG9naW4gPSAhX2lzTG9naW4pLAogICAgICAgICAgICAgICAgY2hpbGQ6IFRleHQoX2lzTG9naW4gPyAn0J3QtdC80LDRlSDQsNC60LDRg9C90YLRgT8g0JfQsNGA0LXRlSGBgtGA0YPQstCw0YLQuNGB0Y8nIDogJ9CS0LbQtSDRlSDQsNC60LDRg9C90YI/INCS0LLRltC50YLQuCcsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5ncmV5KSksCiAgICAgICAgICAgICAgKQogICAgICAgICAgICBdLAogICAgICAgICAgKSwKICAgICAgICApLAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > lib/features/auth/presentation/screens/simple_auth_screen.dart     
-    - name: STEP 8 - Inject Audio & Core Files (Base64)
+        mkdir -p lib/features/chat/presentation/screens        
+        cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
+        import 'package:flutter/material.dart';
+        import 'dart:math';
+        class DailyRewardScreen extends StatefulWidget {
+          const DailyRewardScreen({super.key});
+          @override
+          State<DailyRewardScreen> createState() => _DailyRewardScreenState();
+        }
+        class _DailyRewardScreenState extends State<DailyRewardScreen> {
+          bool _claimed = false;
+          int _reward = 0;
+
+          void _claimReward() {
+            setState(() {
+              _reward = Random().nextInt(41) + 10;
+              _claimed = true;
+            });
+          }
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Щоденна Нагорода', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.card_giftcard,
+                      size: 120,
+                      color: _claimed ? Colors.grey : Colors.orange,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      _claimed ? 'Ви отримали $_reward монет!' : 'Ваш подарунок чекає!',
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 40),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _claimed ? Colors.grey : Colors.orange,
+                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                      ),
+                      onPressed: _claimed ? null : _claimReward,
+                      child: Text(
+                        _claimed ? 'Повернутися завтра' : 'Відкрити',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF
+        cat << 'EOF' > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
+        import 'package:flutter/material.dart';
+        import 'dart:math';
+        class SpinWheelScreen extends StatefulWidget {
+          const SpinWheelScreen({super.key});
+          @override
+          State<SpinWheelScreen> createState() => _SpinWheelScreenState();
+        }
+        class _SpinWheelScreenState extends State<SpinWheelScreen> with SingleTickerProviderStateMixin {
+          late AnimationController _ctrl;
+          bool _spinning = false;
+
+          @override
+          void initState() {
+            super.initState();
+            _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 3));
+          }
+          @override
+          void dispose() {
+            _ctrl.dispose();
+            super.dispose();
+          }
+          void _spin() {
+            if (_spinning) return;
+            setState(() => _spinning = true);
+            _ctrl.reset();
+            _ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.decelerate).then((_) {
+              setState(() => _spinning = false);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ви виграли приз!')));
+            });
+          }
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Колесо Фортуни', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    RotationTransition(
+                      turns: _ctrl,
+                      child: Container(
+                        width: 300,
+                        height: 300,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const SweepGradient(
+                            colors: [Colors.red, Colors.blue, Colors.green, Colors.yellow, Colors.red],
+                          ),
+                          border: Border.all(color: Colors.white, width: 5),
+                        ),
+                        child: const Center(
+                          child: Text('КРУТИТИ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 30, color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 50),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C63FF),
+                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                      ),
+                      onPressed: _spinning ? null : _spin,
+                      child: const Text('ЗАПУСТИТИ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF
+        cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
+        import 'package:flutter/material.dart';
+        class AchievementsScreen extends StatelessWidget {
+          const AchievementsScreen({super.key});
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Досягнення', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildBadge(Icons.headphones, 'Слухач-початківець', 'Послухайте 10 треків', true),
+                  _buildBadge(Icons.playlist_add_check, 'Куратор', 'Створіть свій перший плейлист', true),
+                  _buildBadge(Icons.star, 'Супер-фан', 'Отримайте 1000 очок', false),
+                  _buildBadge(Icons.radio, 'Радіо-маніяк', 'Слухайте радіо 5 годин поспіль', false),
+                ],
+              ),
+            );
+          }
+          Widget _buildBadge(IconData icon, String title, String desc, bool unlocked) {
+            return Card(
+              color: unlocked ? const Color(0xFF1E1E2C) : Colors.white10,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: Icon(icon, color: unlocked ? Colors.amber : Colors.grey, size: 40),
+                title: Text(title, style: TextStyle(color: unlocked ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                subtitle: Text(desc, style: TextStyle(color: unlocked ? Colors.grey : Colors.grey.withOpacity(0.5))),
+                trailing: unlocked ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.lock, color: Colors.grey),
+              ),
+            );
+          }
+        }
+        EOF
+        cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/services/supabase_service.dart';
+        class RadioScreen extends StatelessWidget {
+          const RadioScreen({super.key});
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('OpenWave Радіо', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const SweepGradient(colors: [Color(0xFF6C63FF), Colors.purple, Color(0xFF6C63FF)]),
+                        boxShadow: [BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.5), blurRadius: 30, spreadRadius: 10)],
+                      ),
+                      child: const Center(child: Icon(Icons.radio, size: 80, color: Colors.white)),
+                    ),
+                    const SizedBox(height: 40),
+                    const Text('LIVE RADIO', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white)),
+                    const SizedBox(height: 10),
+                    const Text('Слухайте найкраще з нами', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 40),
+                    IconButton(
+                      iconSize: 80,
+                      icon: const Icon(Icons.play_circle_fill, color: Color(0xFF6C63FF)),
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Підключення до ефіру...'))),
+                    ),
+                    const SizedBox(height: 40),
+                    FutureBuilder<bool>(
+                      future: SupabaseService().isAdmin(),
+                      builder: (context, snapshot) {
+                        if (snapshot.data == true) {
+                          return ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                            icon: const Icon(Icons.upload, color: Colors.white),
+                            label: const Text('Завантажити в ефір (Адмін)', style: TextStyle(color: Colors.white)),
+                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Папка radio_tracks готова'))),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    )
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF        
+        cat << 'EOF' > lib/features/chat/presentation/screens/chat_list_screen.dart
+        import 'package:flutter/material.dart';
+        class ChatListScreen extends StatelessWidget {
+          const ChatListScreen({super.key});
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Повідомлення', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.black,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+              body: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  ListTile(
+                    leading: const CircleAvatar(backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.support_agent, color: Colors.white)),
+                    title: const Text('Технічна підтримка / Адмін', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Привіт! Чим можемо допомогти?', style: TextStyle(color: Colors.grey)),
+                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Чат в розробці...'))),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        EOF
+    - name: STEP 8 - Core UI, AUDIO URL FIX & Auth Screen
       run: |
-        cd ${{ env.FLUTTER_DIR }}
+        cd ${{ env.FLUTTER_DIR }}        
+        mkdir -p lib/features/auth/presentation/screens
+        cat << 'EOF' > lib/features/auth/presentation/screens/simple_auth_screen.dart
+        import 'package:flutter/material.dart';
+        import 'package:supabase_flutter/supabase_flutter.dart';
+        class SimpleAuthScreen extends StatefulWidget {
+          const SimpleAuthScreen({super.key});
+          @override State<SimpleAuthScreen> createState() => _SimpleAuthScreenState();
+        }
+        class _SimpleAuthScreenState extends State<SimpleAuthScreen> {
+          bool _isLogin = true;
+          bool _loading = false;
+          final _emailController = TextEditingController();
+          final _passwordController = TextEditingController();
+          Future<void> _submit() async {
+            setState(() => _loading = true);
+            try {
+              if (_isLogin) {
+                await Supabase.instance.client.auth.signInWithPassword(
+                  email: _emailController.text.trim(),
+                  password: _passwordController.text.trim(),
+                );
+              } else {
+                await Supabase.instance.client.auth.signUp(
+                  email: _emailController.text.trim(),
+                  password: _passwordController.text.trim(),
+                );
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Реєстрація успішна! Тепер увійдіть.')));
+                setState(() => _isLogin = true);
+              }
+            } catch (e) {
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Помилка: ${e.toString().split('] ').last}'), backgroundColor: Colors.redAccent));
+            }
+            if (mounted) setState(() => _loading = false);
+          }
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              body: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.waves, size: 80, color: Color(0xFF6C63FF)),
+                      const SizedBox(height: 20),
+                      Text(_isLogin ? 'Вхід в OpenWave' : 'Створення акаунту', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 40),
+                      TextField(controller: _emailController, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Email', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF1E1E2C), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+                      const SizedBox(height: 16),
+                      TextField(controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Пароль', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF1E1E2C), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          onPressed: _loading ? null : _submit,
+                          child: _loading ? const CircularProgressIndicator(color: Colors.white) : Text(_isLogin ? 'Увійти' : 'Зареєструватися', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () => setState(() => _isLogin = !_isLogin),
+                        child: Text(_isLogin ? 'Немає акаунту? Зареєструватися' : 'Вже є акаунт? Увійти', style: const TextStyle(color: Colors.grey)),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+        }
+        EOF
         mkdir -p lib/core/services
-        mkdir -p lib/features/player/presentation/screens        
-        # Audio Service
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvZm91bmRhdGlvbi5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOmp1c3RfYXVkaW8vanVzdF9hdWRpby5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOmp1c3RfYXVkaW9fYmFja2dyb3VuZC9qdXN0X2F1ZGlvX2JhY2tncm91bmQuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL21vZGVscy90cmFja19tb2RlbC5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOnN1cGFiYXNlX2ZsdXR0ZXIvc3VwYWJhc2VfZmx1dHRlci5kYXJ0JzsKCmNsYXNzIFNpbXBsZUF1ZGlvU2VydmljZSB7CiAgc3RhdGljIGZpbmFsIFNpbXBsZUF1ZGlvU2VydmljZSBfaW5zdGFuY2UgPSBTaW1wbGVBdWRpb1NlcnZpY2UuX2ludGVybmFsKCk7CiAgZmFjdG9yeSBTaW1wbGVBdWRpb1NlcnZpY2UoKSA9PiBfaW5zdGFuY2U7CiAgU2ltcGxlQXVkaW9TZXJ2aWNlLl9pbnRlcm5hbCgpOwogIGZpbmFsIEF1ZGlvUGxheWVyIHBsYXllciA9IEF1ZGlvUGxheWVyKCk7CiAgZmluYWwgVmFsdWVOb3RpZmllcjxUcmFja01vZGVsPz4gY3VycmVudFRyYWNrID0gVmFsdWVOb3RpZmllcihudWxsKTsKCiAgRnV0dXJlPHZvaWQ+IHBsYXlUcmFjayhUcmFja01vZGVsIHRyYWNrKSBhc3luYyB7CiAgICBjdXJyZW50VHJhY2sudmFsdWUgPSB0cmFjazsKICAgIHRyeSB7CiAgICAgIFN0cmluZyB1cmwgPSAnJzsKICAgICAgdHJ5IHsgdXJsID0gKHRyYWNrIGFzIGR5bmFtaWMpLmF1ZGlvVXJsID8/ICcnOyB9IGNhdGNoIChlKSB7fQogICAgICBpZiAodXJsLmlzRW1wdHkpIHsgdHJ5IHsgdXJsID0gKHRyYWNrIGFzIGR5bmFtaWMpLmZpbGVVcmwgPz8gJyc7IH0gY2F0Y2ggKGUpIHt9IH0KICAgICAgaWYgKHVybC5pc0VtcHR5KSB7IHRyeSB7IHVybCA9ICh0cmFjayBhcyBkeW5hbWljKS5maWxlUGF0aCA/PyAnJzsgfSBjYXRjaCAoZSkge30gfQogICAgICAKICAgICAgaWYgKHVybC5pc05vdEVtcHR5KSB7CiAgICAgICAgaWYgKCF1cmwuc3RhcnRzV2l0aCgnaHR0cCcpKSB7CiAgICAgICAgICB1cmwgPSBTdXBhYmFzZS5pbnN0YW5jZS5jbGllbnQuc3RvcmFnZS5mcm9tKCd0cmFja3MnKS5nZXRQdWJsaWNVcmwodXJsKTsKICAgICAgICB9CiAgICAgICAgZmluYWwgYXVkaW9Tb3VyY2UgPSBBdWRpb1NvdXJjZS51cmkoCiAgICAgICAgICBVcmkucGFyc2UodXJsKSwKICAgICAgICAgIHRhZzogTWVkaWFJdGVtKAogICAgICAgICAgICBpZDogdHJhY2suaWQsCiAgICAgICAgICAgIGFsYnVtOiAnT3BlbldhdmUnLAogICAgICAgICAgICB0aXRsZTogdHJhY2sudGl0bGUsCiAgICAgICAgICAgIGFydGlzdDogdHJhY2suYXJ0aXN0LAogICAgICAgICAgICBhcnRVcmk6IFVyaS5wYXJzZSgnaHR0cHM6Ly91aS1hdmF0YXJzLmNvbS9hcGkvP25hbWU9JHt0cmFjay50aXRsZX0mYmFja2dyb3VuZD1yYW5kb20nKQogICAgICAgICAgKSwKICAgICAgICApOwogICAgICAgIGF3YWl0IHBsYXllci5zZXRBdWRpb1NvdXJjZShhdWRpb1NvdXJjZSk7CiAgICAgICAgcGxheWVyLnBsYXkoKTsKICAgICAgfQogICAgfSBjYXRjaCAoZSkgewogICAgICBkZWJ1Z1ByaW50KCJQbGF5YmFjayBlcnJvcjogJGUiKTsKICAgIH0KICB9CgogIHZvaWQgdG9nZ2xlUGxheVBhdXNlKCkgewogICAgaWYgKHBsYXllci5wbGF5aW5nKSB7CiAgICAgIHBsYXllci5wYXVzZSgpOwogICAgfSBlbHNlIHsKICAgICAgcGxheWVyLnBsYXkoKTsKICAgIH0KICB9Cn0=" | base64 -d > lib/core/services/simple_audio_service.dart
-        # Full Player Screen
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL21vZGVscy90cmFja19tb2RlbC5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOm9wZW53YXZlL2NvcmUvc2VydmljZXMvc2ltcGxlX2F1ZGlvX3NlcnZpY2UuZGFydCc7CgpjbGFzcyBGdWxsUGxheWVyU2NyZWVuIGV4dGVuZHMgU3RhdGVsZXNzV2lkZ2V0IHsKICBmaW5hbCBUcmFja01vZGVsIHRyYWNrOwogIGNvbnN0IEZ1bGxQbGF5ZXJTY3JlZW4oe3N1cGVyLmtleSwgcmVxdWlyZWQgdGhpcy50cmFja30pOwoKICBTdHJpbmcgX2Zvcm1hdER1cmF0aW9uKER1cmF0aW9uPyBkKSB7CiAgICBpZiAoZCA9PSBudWxsKSByZXR1cm4gJzA6MDAnOwogICAgU3RyaW5nIHR3b0RpZ2l0cyhpbnQgbikgPT4gbi50b1N0cmluZygpLnBhZExlZnQoMiwgJzAnKTsKICAgIHJldHVybiAnJHtkLmluTWludXRlc306JHt0d29EaWdpdHMoZC5pblNlY29uZHMucmVtYWluZGVyKDYwKSl9JzsKICB9CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgZmluYWwgcGxheWVyID0gU2ltcGxlQXVkaW9TZXJ2aWNlKCkucGxheWVyOwogICAgcmV0dXJuIFNjYWZmb2xkKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IGNvbnN0IENvbG9yKDB4RkYxMjEyMUEpLAogICAgICBhcHBCYXI6IEFwcEJhcigKICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy50cmFuc3BhcmVudCwKICAgICAgICBlbGV2YXRpb246IDAsCiAgICAgICAgbGVhZGluZzogSWNvbkJ1dHRvbigKICAgICAgICAgIGljb246IGNvbnN0IEljb24oSWNvbnMua2V5Ym9hcmRfYXJyb3dfZG93biwgY29sb3I6IENvbG9ycy53aGl0ZSwgc2l6ZTogMzIpLAogICAgICAgICAgb25QcmVzc2VkOiAoKSA9PiBOYXZpZ2F0b3IucG9wKGNvbnRleHQpLAogICAgICAgICksCiAgICAgICksCiAgICAgIGJvZHk6IFBhZGRpbmcoCiAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5zeW1tZXRyaWMoaG9yaXpvbnRhbDogMjQpLAogICAgICAgIGNoaWxkOiBDb2x1bW4oCiAgICAgICAgICBtYWluQXhpc0FsaWdubWVudDogTWFpbkF4aXNBbGlnbm1lbnQuY2VudGVyLAogICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgQ29udGFpbmVyKAogICAgICAgICAgICAgIHdpZHRoOiAzMDAsIGhlaWdodDogMzAwLAogICAgICAgICAgICAgIGRlY29yYXRpb246IEJveERlY29yYXRpb24oCiAgICAgICAgICAgICAgICBjb2xvcjogY29uc3QgQ29sb3IoMHhGRjFFMUUyQyksCiAgICAgICAgICAgICAgICBib3JkZXJSYWRpdXM6IEJvcmRlclJhZGl1cy5jaXJjdWxhcigyMCksCiAgICAgICAgICAgICAgICBib3hTaGFkb3c6IFtCb3hTaGFkb3coY29sb3I6IGNvbnN0IENvbG9yKDB4RkY2QzYzRkYpLndpdGhPcGFjaXR5KDAuMyksIGJsdXJSYWRpdXM6IDQwLCBzcHJlYWRSYWRpdXM6IDUpXSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICAgIGNoaWxkOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5tdXNpY19ub3RlLCBzaXplOiAxMjAsIGNvbG9yOiBDb2xvcigweEZGNkM2M0ZGKSksCiAgICAgICAgICAgICksCiAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogNTApLAogICAgICAgICAgICBUZXh0KHRyYWNrLnRpdGxlLCBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGZvbnRTaXplOiAyOCwgZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBjb2xvcjogQ29sb3JzLndoaXRlKSwgdGV4dEFsaWduOiBUZXh0QWxpZ24uY2VudGVyLCBtYXhMaW5lczogMSwgb3ZlcmZsb3c6IFRleHRPdmVyZmxvdy5lbGxpcHNpcyksCiAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogOCksCiAgICAgICAgICAgIFRleHQodHJhY2suYXJ0aXN0LCBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGZvbnRTaXplOiAxOCwgY29sb3I6IENvbG9ycy5ncmV5KSwgdGV4dEFsaWduOiBUZXh0QWxpZ24uY2VudGVyLCBtYXhMaW5lczogMSwgb3ZlcmZsb3c6IFRleHRPdmVyZmxvdy5lbGxpcHNpcyksCiAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogNDApLAogICAgICAgICAgICBTdHJlYW1CdWlsZGVyPER1cmF0aW9uPj4oCiAgICAgICAgICAgICAgc3RyZWFtOiBwbGF5ZXIucG9zaXRpb25TdHJlYW0sCiAgICAgICAgICAgICAgYnVpbGRlcjogKGNvbnRleHQsIHBvc1NuYXApIHsKICAgICAgICAgICAgICAgIHJldHVybiBTdHJlYW1CdWlsZGVyPER1cmF0aW9uPj4oCiAgICAgICAgICAgICAgICAgIHN0cmVhbTogcGxheWVyLmR1cmF0aW9uU3RyZWFtLAogICAgICAgICAgICAgICAgICBidWlsZGVyOiAoY29udGV4dCwgZHVyU25hcCkgewogICAgICAgICAgICAgICAgICAgIGZpbmFsIHBvcyA9IHBvc1NuYXAuZGF0YSA/PyBEdXJhdGlvbi56ZXJvOwogICAgICAgICAgICAgICAgICAgIGZpbmFsIGR1ciA9IGR1clNuYXAuZGF0YSA/PyBEdXJhdGlvbi56ZXJvOwogICAgICAgICAgICAgICAgICAgIGRvdWJsZSBzbGlkZXJWYWx1ZSA9IHBvcy5pblNlY29uZHMudG9Eb3VibGUoKTsKICAgICAgICAgICAgICAgICAgICBkb3VibGUgc2xpZGVyTWF4ID0gZHVyLmluU2Vjb25kcy50b0RvdWJsZSgpOwogICAgICAgICAgICAgICAgICAgIGlmIChzbGlkZXJWYWx1ZSA+IHNsaWRlck1heCkgc2xpZGVyVmFsdWUgPSBzbGlkZXJNYXg7CiAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgcmV0dXJuIENvbHVtbigKICAgICAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgICAgIFNsaWRlclRoZW1lKAogICAgICAgICAgICAgICAgICAgICAgICAgIGRhdGE6IFNsaWRlclRoZW1lRGF0YSgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHRyYWNrSGVpZ2h0OiA0LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgdGh1bWJTaGFwZTogY29uc3QgUm91bmRTbGlkZXJUaHVtYlNoYXBlKGVuYWJsZWRUaHVtYlJhZGl1czogNiksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBhY3RpdmVUcmFja0NvbG9yOiBjb25zdCBDb2xvcigweEZGNkM2M0ZGKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGluYWN0aXZlVHJhY2tDb2xvcjogQ29sb3JzLmdyZXlbODAwXSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHRodW1iQ29sb3I6IENvbG9ycy53aGl0ZSwKICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBTbGlkZXIoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICB2YWx1ZTogc2xpZGVyTWF4ID4gMCA/IHNsaWRlclZhbHVlIDogMCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1heDogc2xpZGVyTWF4ID4gMCA/IHNsaWRlck1heCA6IDEsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZWQ6ICh2KSA9PiBwbGF5ZXIuc2VlayhEdXJhdGlvbihzZWNvbmRzOiB2LnRvSW50KCkpKSwKICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICBSb3coCiAgICAgICAgICAgICAgICAgICAgICAgICAgbWFpbkF4aXNBbGlnbm1lbnQ6IE1haW5BeGlzQWxpZ25tZW50LnNwYWNlQmV0d2VlbiwKICAgICAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dChfZm9ybWF0RHVyYXRpb24ocG9zKSwgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLmdyZXksIGZvbnRTaXplOiAxMikpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dChfZm9ybWF0RHVyYXRpb24oZHVyKSwgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLmdyZXksIGZvbnRTaXplOiAxMikpLAogICAgICAgICAgICAgICAgICAgICAgICAgIF0sCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgIH0KICAgICAgICAgICAgKSwKICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAyMCksCiAgICAgICAgICAgIFJvdygKICAgICAgICAgICAgICBtYWluQXhpc0FsaWdubWVudDogTWFpbkF4aXNBbGlnbm1lbnQuc3BhY2VFdmVubHksCiAgICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICAgIEljb25CdXR0b24oaWNvbjogY29uc3QgSWNvbihJY29ucy5za2lwX3ByZXZpb3VzLCBjb2xvcjogQ29sb3JzLndoaXRlLCBzaXplOiA0MCksIG9uUHJlc3NlZDogKCkge30pLAogICAgICAgICAgICAgICAgU3RyZWFtQnVpbGRlcjxib29sPigKICAgICAgICAgICAgICAgICAgc3RyZWFtOiBwbGF5ZXIucGxheWluZ1N0cmVhbSwKICAgICAgICAgICAgICAgICAgYnVpbGRlcjogKGNvbnRleHQsIHNuYXBzaG90KSB7CiAgICAgICAgICAgICAgICAgICAgZmluYWwgaXNQbGF5aW5nID0gc25hcHNob3QuZGF0YSA/PyBmYWxzZTsKICAgICAgICAgICAgICAgICAgICByZXR1cm4gQ29udGFpbmVyKAogICAgICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogY29uc3QgQm94RGVjb3JhdGlvbihzaGFwZTogQm94U2hhcGUuY2lyY2xlLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLAogICAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IEljb25CdXR0b24oCiAgICAgICAgICAgICAgICAgICAgICAgIGljb246IEljb24oaXNQbGF5aW5nID8gSWNvbnMucGF1c2UgOiBJY29ucy5wbGF5X2Fycm93LCBjb2xvcjogQ29sb3JzLndoaXRlLCBzaXplOiA1MCksCiAgICAgICAgICAgICAgICAgICAgICAgIG9uUHJlc3NlZDogKCkgPT4gU2ltcGxlQXVkaW9TZXJ2aWNlKCkudG9nZ2xlUGxheVBhdXNlKCksCiAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgSWNvbkJ1dHRvbihpY29uOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5za2lwX25leHQsIGNvbG9yOiBDb2xvcnMud2hpdGUsIHNpemU6IDQwKSwgb25QcmVzc2VkOiAoKSB7fSksCiAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgKSwKICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiA0MCksCiAgICAgICAgICBdLAogICAgICAgICksCiAgICAgICksCiAgICApOwogIH0KfQ==" | base64 -d > lib/features/player/presentation/screens/full_player_screen.dart
-    - name: STEP 9 - Inject Tabs & Main Screen (Base64)
-      run: |
-        cd ${{ env.FLUTTER_DIR }}
+        cat << 'EOF' > lib/core/services/simple_audio_service.dart
+        import 'package:flutter/foundation.dart';
+        import 'package:just_audio/just_audio.dart';
+        import 'package:just_audio_background/just_audio_background.dart';
+        import 'package:openwave/core/models/track_model.dart';
+        import 'package:supabase_flutter/supabase_flutter.dart';
+        class SimpleAudioService {
+          static final SimpleAudioService _instance = SimpleAudioService._internal();
+          factory SimpleAudioService() => _instance;
+          SimpleAudioService._internal();
+          final AudioPlayer player = AudioPlayer();
+          final ValueNotifier<TrackModel?> currentTrack = ValueNotifier(null);
+          Future<void> playTrack(TrackModel track) async {
+            currentTrack.value = track;
+            try {
+              String url = '';
+              try { url = (track as dynamic).audioUrl ?? ''; } catch (e) {}
+              if (url.isEmpty) { try { url = (track as dynamic).fileUrl ?? ''; } catch (e) {} }
+              if (url.isEmpty) { try { url = (track as dynamic).filePath ?? ''; } catch (e) {} }              
+              if (url.isNotEmpty) {
+                if (!url.startsWith('http')) {
+                  url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
+                }                
+                final audioSource = AudioSource.uri(
+                  Uri.parse(url),
+                  tag: MediaItem(
+                    id: track.id,
+                    album: 'OpenWave',
+                    title: track.title,
+                    artist: track.artist,
+                    artUri: Uri.parse('https://ui-avatars.com/api/?name=${track.title}&background=random')
+                  ),
+                );
+                await player.setAudioSource(audioSource);
+                player.play();
+              }
+            } catch (e) {
+              debugPrint("Playback error: $e");
+            }
+          }
+          void togglePlayPause() {
+            if (player.playing) {
+              player.pause();
+            } else {
+              player.play();
+            }
+          }
+        }
+        EOF        
+        mkdir -p lib/features/player/presentation/screens
+        cat << 'EOF' > lib/features/player/presentation/screens/full_player_screen.dart
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/models/track_model.dart';
+        import 'package:openwave/core/services/simple_audio_service.dart';
+        class FullPlayerScreen extends StatelessWidget {
+          final TrackModel track;
+          const FullPlayerScreen({super.key, required this.track});
+          String _formatDuration(Duration? d) {
+            if (d == null) return '0:00';
+            String twoDigits(int n) => n.toString().padLeft(2, '0');
+            return '${d.inMinutes}:${twoDigits(d.inSeconds.remainder(60))}';
+          }
+          @override
+          Widget build(BuildContext context) {
+            final player = SimpleAudioService().player;
+            return Scaffold(
+              backgroundColor: const Color(0xFF12121A),
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              body: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 300, height: 300,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E2C),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 40, spreadRadius: 5)],
+                      ),
+                      child: const Icon(Icons.music_note, size: 120, color: Color(0xFF6C63FF)),
+                    ),
+                    const SizedBox(height: 50),
+                    Text(track.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 8),
+                    Text(track.artist, style: const TextStyle(fontSize: 18, color: Colors.grey), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 40),
+                    StreamBuilder<Duration?>(
+                      stream: player.positionStream,
+                      builder: (context, posSnap) {
+                        return StreamBuilder<Duration?>(
+                          stream: player.durationStream,
+                          builder: (context, durSnap) {
+                            final pos = posSnap.data ?? Duration.zero;
+                            final dur = durSnap.data ?? Duration.zero;
+                            double sliderValue = pos.inSeconds.toDouble();
+                            double sliderMax = dur.inSeconds.toDouble();
+                            if (sliderValue > sliderMax) sliderValue = sliderMax;                            
+                            return Column(
+                              children: [
+                                SliderTheme(
+                                  data: SliderThemeData(
+                                    trackHeight: 4,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                    activeTrackColor: const Color(0xFF6C63FF),
+                                    inactiveTrackColor: Colors.grey[800],
+                                    thumbColor: Colors.white,
+                                  ),
+                                  child: Slider(
+                                    value: sliderMax > 0 ? sliderValue : 0,
+                                    max: sliderMax > 0 ? sliderMax : 1,
+                                    onChanged: (v) => player.seek(Duration(seconds: v.toInt())),
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(_formatDuration(pos), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                    Text(_formatDuration(dur), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      }
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: () {}),
+                        StreamBuilder<bool>(
+                          stream: player.playingStream,
+                          builder: (context, snapshot) {
+                            final isPlaying = snapshot.data ?? false;
+                            return Container(
+                              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF6C63FF)),
+                              child: IconButton(
+                                icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50),
+                                onPressed: () => SimpleAudioService().togglePlayPause(),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: () {}),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+        EOF
         HOME_FILE=$(find lib -name "home_tab.dart" -type f | head -n 1)
         if [ -z "$HOME_FILE" ]; then HOME_FILE="lib/features/home/presentation/screens/home_tab.dart"; mkdir -p $(dirname "$HOME_FILE"); fi
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL3NlcnZpY2VzL3N1cGFiYXNlX3NlcnZpY2UuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL21vZGVscy90cmFja19tb2RlbC5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOm9wZW53YXZlL2NvcmUvc2VydmljZXMvc2ltcGxlX2F1ZGlvX3NlcnZpY2UuZGFydCc7CgpjbGFzcyBIb21lVGFiIGV4dGVuZHMgU3RhdGVmdWxXaWRnZXQgewogIGNvbnN0IEhvbWVUYWIoe3N1cGVyLmtleX0pOwogIEBvdmVycmlkZSBTdGF0ZTxIb21lVGFiPiBjcmVhdGVTdGF0ZSgpID0+IF9Ib21lVGFiU3RhdGUoKTsKfQoKY2xhc3MgX0hvbWVUYWJTdGF0ZSBleHRlbmRzIFN0YXRlPEhvbWVUYWI+IHsKICBmaW5hbCBfc3VwYWJhc2UgPSBTdXBhYmFzZVNlcnZpY2UoKTsKICBMaXN0PFRyYWNrTW9kZWw+IF90cmFja3MgPSBbXTsKICBib29sIF9sb2FkaW5nID0gdHJ1ZTsKCiAgQG92ZXJyaWRlIHZvaWQgaW5pdFN0YXRlKCkgewogICAgc3VwZXIuaW5pdFN0YXRlKCk7CiAgICBfc2FmZUxvYWQoKTsKICB9CgogIEZ1dHVyZTx2b2lkPiBfc2FmZUxvYWQoKSBhc3luYyB7CiAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKICAgIHNldFN0YXRlKCgpID0+IF9sb2FkaW5nID0gdHJ1ZSk7CiAgICB0cnkgewogICAgICBmaW5hbCB0cmFja3MgPSBhd2FpdCBfc3VwYWJhc2UuZ2V0VHJhY2tzKCk7CiAgICAgIGlmIChtb3VudGVkKSBzZXRTdGF0ZSgoKSB7IF90cmFja3MgPSB0cmFja3M7IF9sb2FkaW5nID0gZmFsc2U7IH0pOwogICAgfSBjYXRjaCAoZSkgewogICAgICBpZiAobW91bnRlZCkgc2V0U3RhdGUoKCkgPT4gX2xvYWRpbmcgPSBmYWxzZSk7CiAgICB9CiAgfQoKICBAb3ZlcnJpZGUgV2lkZ2V0IGJ1aWxkKEJ1aWxkQ29udGV4dCBjb250ZXh0KSB7CiAgICByZXR1cm4gUmVmcmVzaEluZGljYXRvcigKICAgICAgb25SZWZyZXNoOiBfc2FmZUxvYWQsCiAgICAgIGNoaWxkOiBDdXN0b21TY3JvbGxWaWV3KAogICAgICAgIHNsaXZlcnM6IFsKICAgICAgICAgIGNvbnN0IFNsaXZlckFwcEJhcihmbG9hdGluZzogdHJ1ZSwgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssIHRpdGxlOiBUZXh0KCdPcGVuV2F2ZScsIHN0eWxlOiBUZXh0U3R5bGUoZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBjb2xvcjogQ29sb3JzLndoaXRlKSkpLAogICAgICAgICAgaWYgKF9sb2FkaW5nKSBjb25zdCBTbGl2ZXJGaWxsUmVtYWluaW5nKGNoaWxkOiBDZW50ZXIoY2hpbGQ6IENpcmN1bGFyUHJvZ3Jlc3NJbmRpY2F0b3IoY29sb3I6IENvbG9yKDB4RkY2QzYzRkYpKSkpCiAgICAgICAgICBlbHNlIGlmIChfdHJhY2tzLmlzRW1wdHkpIGNvbnN0IFNsaXZlckZpbGxSZW1haW5pbmcoY2hpbGQ6IENlbnRlcihjaGlsZDogVGV4dCgn0J/RltGB0LXQvdGMINGJ0LUg0L3QtdC80LDRlS4g0JfQsNCy0LDQvdGC0LDQttGC0LUg0L/QtdGA0YjRgyEnLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpKSkpCiAgICAgICAgICBlbHNlIFNsaXZlclBhZGRpbmcoCiAgICAgICAgICAgIHBhZGRpbmc6IGNvbnN0IEVkZ2VJbnNldHMuYWxsKDE2KSwKICAgICAgICAgICAgc2xpdmVyOiBTbGl2ZXJMaXN0KAogICAgICAgICAgICAgIGRlbGVnYXRlOiBTbGl2ZXJDaGlsZEJ1aWxkZXJEZWxlZ2F0ZSgoY29udGV4dCwgaW5kZXgpIHsKICAgICAgICAgICAgICAgIGZpbmFsIHRyYWNrID0gX3RyYWNrc1tpbmRleF07CiAgICAgICAgICAgICAgICByZXR1cm4gQ29udGFpbmVyKAogICAgICAgICAgICAgICAgICBtYXJnaW46IGNvbnN0IEVkZ2VJbnNldHMub25seShib3R0b206IDEyKSwKICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogQm94RGVjb3JhdGlvbihjb2xvcjogY29uc3QgQ29sb3IoMHhGRjFFMUUyQyksIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDEyKSksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBMaXN0VGlsZSgKICAgICAgICAgICAgICAgICAgICBsZWFkaW5nOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5tdXNpY19ub3RlLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLAogICAgICAgICAgICAgICAgICAgIHRpdGxlOiBUZXh0KHRyYWNrLnRpdGxlLCBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCwgY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgICAgICAgICAgICAgIHN1YnRpdGxlOiBUZXh0KHRyYWNrLmFydGlzdCwgc3R5bGU6IGNvbnN0IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLmdyZXksIGZvbnRTaXplOiAxMikpLAogICAgICAgICAgICAgICAgICAgIHRyYWlsaW5nOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5wbGF5X2NpcmNsZV9maWxsLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRiksIHNpemU6IDMyKSwKICAgICAgICAgICAgICAgICAgICBvblRhcDogKCkgPT4gU2ltcGxlQXVkaW9TZXJ2aWNlKCkucGxheVRyYWNrKHRyYWNrKSwKICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgfSwgY2hpbGRDb3VudDogX3RyYWNrcy5sZW5ndGgpLAogICAgICAgICAgICApLAogICAgICAgICAgKSwKICAgICAgICBdLAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > "$HOME_FILE"
+        cat << 'EOF' > "$HOME_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/services/supabase_service.dart';
+        import 'package:openwave/core/models/track_model.dart';
+        import 'package:openwave/core/services/simple_audio_service.dart';
+        class HomeTab extends StatefulWidget {
+          const HomeTab({super.key});
+          @override State<HomeTab> createState() => _HomeTabState();
+        }
+        class _HomeTabState extends State<HomeTab> {
+          final _supabase = SupabaseService();
+          List<TrackModel> _tracks = [];
+          bool _loading = true;
+          @override void initState() {
+            super.initState();
+            _safeLoad();
+          }
+          Future<void> _safeLoad() async {
+            if (!mounted) return;
+            setState(() => _loading = true);
+            try {
+              final tracks = await _supabase.getTracks();
+              if (mounted) setState(() { _tracks = tracks; _loading = false; });
+            } catch (e) {
+              if (mounted) setState(() => _loading = false);
+            }
+          }
+          @override Widget build(BuildContext context) {
+            return RefreshIndicator(
+              onRefresh: _safeLoad,
+              child: CustomScrollView(
+                slivers: [
+                  const SliverAppBar(floating: true, backgroundColor: Colors.black, title: Text('OpenWave', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
+                  if (_loading) const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))))
+                  else if (_tracks.isEmpty) const SliverFillRemaining(child: Center(child: Text('Пісень ще немає. Завантажте першу!', style: TextStyle(color: Colors.white))))
+                  else SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final track = _tracks[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: const Icon(Icons.music_note, color: Color(0xFF6C63FF)),
+                            title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            subtitle: Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                            trailing: const Icon(Icons.play_circle_fill, color: Color(0xFF6C63FF), size: 32),
+                            onTap: () => SimpleAudioService().playTrack(track),
+                          ),
+                        );
+                      }, childCount: _tracks.length),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        EOF        
         LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
         if [ -z "$LIB_FILE" ]; then LIB_FILE="lib/features/home/presentation/screens/library_tab.dart"; mkdir -p $(dirname "$LIB_FILE"); fi
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL3NlcnZpY2VzL3N1cGFiYXNlX3NlcnZpY2UuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9jb3JlL21vZGVscy9wbGF5bGlzdF9tb2RlbC5kYXJ0JzsKCmNsYXNzIExpYnJhcnlUYWIgZXh0ZW5kcyBTdGF0ZWZ1bFdpZGdldCB7CiAgY29uc3QgTGlicmFyeVRhYih7c3VwZXIua2V5fSk7CiAgQG92ZXJyaWRlIFN0YXRlPExpYnJhcnlUYWI+IGNyZWF0ZVN0YXRlKCkgPT4gX0xpYnJhcnlUYWJTdGF0ZSgpOwp9CgpjbGFzcyBfTGlicmFyeVRhYlN0YXRlIGV4dGVuZHMgU3RhdGU8TGlicmFyeVRhYj4gewogIGZpbmFsIF9zdXBhYmFzZSA9IFN1cGFiYXNlU2VydmljZSgpOwogIExpc3Q8UGxheWxpc3RNb2RlbD4gX3BsYXlsaXN0cyA9IFtdOwogIGJvb2wgX2xvYWRpbmcgPSB0cnVlOwoKICBAb3ZlcnJpZGUgdm9pZCBpbml0U3RhdGUoKSB7CiAgICBzdXBlci5pbml0U3RhdGUoKTsKICAgIF9sb2FkUGxheWxpc3RzKCk7CiAgfQoKICBGdXR1cmU8dm9pZD4gX2xvYWRQbGF5bGlzdHMoKSBhc3luYyB7CiAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKICAgIHNldFN0YXRlKCgpID0+IF9sb2FkaW5nID0gdHJ1ZSk7CiAgICB0cnkgewogICAgICBmaW5hbCBwbCA9IGF3YWl0IF9zdXBhYmFzZS5nZXRVc2VyUGxheWxpc3RzKCk7CiAgICAgIGlmIChtb3VudGVkKSBzZXRTdGF0ZSgoKSB7IF9wbGF5bGlzdHMgPSBwbDsgX2xvYWRpbmcgPSBmYWxzZTsgfSk7CiAgICB9IGNhdGNoIChlKSB7CiAgICAgIGlmIChtb3VudGVkKSBzZXRTdGF0ZSgoKSA9PiBfbG9hZGluZyA9IGZhbHNlKTsKICAgIH0KICB9CgogIHZvaWQgX3Nob3dDcmVhdGVEaWFsb2coKSB7CiAgICBmaW5hbCBjdHJsID0gVGV4dEVkaXRpbmdDb250cm9sbGVyKCk7CiAgICBzaG93RGlhbG9nKGNvbnRleHQ6IGNvbnRleHQsIGJ1aWxkZXI6IChjdHgpID0+IEFsZXJ0RGlhbG9nKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IGNvbnN0IENvbG9yKDB4RkYxRTFFMkMpLAogICAgICB0aXRsZTogY29uc3QgVGV4dCgn0KHRgtCy0L7RgNC40YLQuCDQv9C70LXQudC70LjRgdGCJywgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogQ29sb3JzLndoaXRlKSksCiAgICAgIGNvbnRlbnQ6IFRleHRGaWVsZChjb250cm9sbGVyOiBjdHJsLCBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMud2hpdGUpLCBkZWNvcmF0aW9uOiBjb25zdCBJbnB1dERlY29yYXRpb24oaGludFRleHQ6ICfQndCw0LfQstCwINC/0LvQtdC50LvQuNGB0YLQsCcsIGhpbnRTdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcnMuZ3JleSkpKSwKICAgICAgYWN0aW9uczogWwogICAgICAgIFRleHRCdXR0b24ob25QcmVzc2VkOiAoKSA9PiBOYXZpZ2F0b3IucG9wKGN0eCksIGNoaWxkOiBjb25zdCBUZXh0KCfQktGW0LTQvNGW0L3QsCcsIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5ncmV5KSkpLAogICAgICAgIEVsZXZhdGVkQnV0dG9uKAogICAgICAgICAgb25QcmVzc2VkOiAoKSBhc3luYyB7CiAgICAgICAgICAgIGlmIChjdHJsLnRleHQuaXNOb3RFbXB0eSkgewogICAgICAgICAgICAgIGF3YWl0IF9zdXBhYmFzZS5jcmVhdGVQbGF5bGlzdChuYW1lOiBjdHJsLnRleHQpOwogICAgICAgICAgICAgIGlmIChtb3VudGVkKSB7IE5hdmlnYXRvci5wb3AoY3R4KTsgX2xvYWRQbGF5bGlzdHMoKTsgfQogICAgICAgICAgICB9CiAgICAgICAgICB9LAogICAgICAgICAgc3R5bGU6IEVsZXZhdGVkQnV0dG9uLnN0eWxlRnJvbShiYWNrZ3JvdW5kQ29sb3I6IGNvbnN0IENvbG9yKDB4RkY2QzYzRkYpKSwKICAgICAgICAgIGNoaWxkOiBjb25zdCBUZXh0KCfQodGC0LLQvtGA0LjRgtC4JyksCiAgICAgICAgKSwKICAgICAgXSwKICAgICkpOwogIH0KCiAgQG92ZXJyaWRlIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgcmV0dXJuIFJlZnJlc2hJbmRpY2F0b3IoCiAgICAgIG9uUmVmcmVzaDogX2xvYWRQbGF5bGlzdHMsCiAgICAgIGNoaWxkOiBDdXN0b21TY3JvbGxWaWV3KAogICAgICAgIHNsaXZlcnM6IFsKICAgICAgICAgIGNvbnN0IFNsaXZlckFwcEJhcihmbG9hdGluZzogdHJ1ZSwgYmFja2dyb3VuZENvbG9yOiBDb2xvcnMuYmxhY2ssIHRpdGxlOiBUZXh0KCfQkdGW0LHQu9GW0L7RgtC10LrQsCcsIHN0eWxlOiBUZXh0U3R5bGUoZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkLCBjb2xvcjogQ29sb3JzLndoaXRlKSkpLAogICAgICAgICAgU2xpdmVyUGFkZGluZygKICAgICAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5hbGwoMTYpLAogICAgICAgICAgICBzbGl2ZXI6IFNsaXZlckxpc3QoCiAgICAgICAgICAgICAgZGVsZWdhdGU6IFNsaXZlckNoaWxkQnVpbGRlckRlbGVnYXRlKChjb250ZXh0LCBpbmRleCkgewogICAgICAgICAgICAgICAgaWYgKGluZGV4ID09IDApIHJldHVybiBSb3coCiAgICAgICAgICAgICAgICAgIG1haW5BeGlzQWxpZ25tZW50OiBNYWluQXhpc0FsaWdubWVudC5zcGFjZUJldHdlZW4sCiAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgY29uc3QgVGV4dCgn0J/Qu9C10LnQu9C40YHRgtC4Jywgc3R5bGU6IFRleHRTdHlsZShmb250U2l6ZTogMjAsIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCwgY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgICAgICAgICAgICAgIFJvdyhjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgSWNvbkJ1dHRvbihpY29uOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5yZWZyZXNoLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLCBvblByZXNzZWQ6IF9sb2FkUGxheWxpc3RzKSwKICAgICAgICAgICAgICAgICAgICAgIEljb25CdXR0b24oaWNvbjogY29uc3QgSWNvbjxJY29uRGF0YT4oSWNvbnMuYWRkLCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLCBvblByZXNzZWQ6IF9zaG93Q3JlYXRlRGlhbG9nKSwKICAgICAgICAgICAgICAgICAgICBdKQogICAgICAgICAgICAgICAgICBdCiAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgaWYgKF9sb2FkaW5nKSByZXR1cm4gY29uc3QgUGFkZGluZyhwYWRkaW5nOiBFZGdlSW5zZXRzLmFsbCgyMCksIGNoaWxkOiBDZW50ZXIoY2hpbGQ6IENpcmN1bGFyUHJvZ3Jlc3NJbmRpY2F0b3IoY29sb3I6IENvbG9yKDB4RkY2QzYzRkYpKSkpOwogICAgICAgICAgICAgICAgaWYgKF9wbGF5bGlzdHMuaXNFbXB0eSkgcmV0dXJuIFBhZGRpbmcocGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5hbGwoMjApLCBjaGlsZDogQ2VudGVyKGNoaWxkOiBUZXh0QnV0dG9uKG9uUHJlc3NlZDogX3Nob3dDcmVhdGVEaWFsb2csIGNoaWxkOiBjb25zdCBUZXh0KCfQodGC0LLQvtGA0ZbRgtGMINC/0LXRgNGI0LjQuSDQv9C70LXQudC70LjRgdGCISEnLCBzdHlsZTogVGV4dFN0eWxlKGNvbG9yOiBDb2xvcigweEZGNkM2M0ZGKSkpKSkpOwogICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICBmaW5hbCBwID0gX3BsYXlsaXN0c1tpbmRleCAtIDFdOwogICAgICAgICAgICAgICAgcmV0dXJuIExpc3RUaWxlKAogICAgICAgICAgICAgICAgICBsZWFkaW5nOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5wbGF5bGlzdF9wbGF5LCBjb2xvcjogQ29sb3IoMHhGRjZDNjNGRikpLAogICAgICAgICAgICAgICAgICB0aXRsZTogVGV4dChwLm5hbWUsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgICAgICAgICAgICBzdWJ0aXRsZTogVGV4dCgnJHtwLnRyYWNrcy5sZW5ndGh9INGC0YDQtdC60ZbQcicsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5ncmV5KSksCiAgICAgICAgICAgICAgICAgIG9uVGFwOiAoKSA9PiBTY2FmZm9sZE1lc3Nlbmdlci5vZihjb250ZXh0KS5zaG93U25hY2tCYXIoY29uc3QgU25hY2tCYXIoY29udGVudDogVGV4dCgn0JLRgNC+0LfRgNC+0LHRhtGWIicpKSwKICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgfSwgY2hpbGRDb3VudDogX2xvYWRpbmcgfHwgX3BsYXlsaXN0cy5pc0VtcHR5ID8gMiA6IF9wbGF5bGlzdHMubGVuZ3RoICsgMSksCiAgICAgICAgICAgICksCiAgICAgICAgICApLAogICAgICAgIF0sCiAgICAgICksCiAgICApOwogIH0KfQ==" | base64 -d > "$LIB_FILE"
+        cat << 'EOF' > "$LIB_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/services/supabase_service.dart';
+        import 'package:openwave/core/models/playlist_model.dart';
+        class LibraryTab extends StatefulWidget {
+          const LibraryTab({super.key});
+          @override State<LibraryTab> createState() => _LibraryTabState();
+        }
+        class _LibraryTabState extends State<LibraryTab> {
+          final _supabase = SupabaseService();
+          List<PlaylistModel> _playlists = [];
+          bool _loading = true;
+          @override void initState() {
+            super.initState();
+            _loadPlaylists();
+          }
+          Future<void> _loadPlaylists() async {
+            if (!mounted) return;
+            setState(() => _loading = true);
+            try {
+              final pl = await _supabase.getUserPlaylists();
+              if (mounted) setState(() { _playlists = pl; _loading = false; });
+            } catch (e) {
+              if (mounted) setState(() => _loading = false);
+            }
+          }
+          void _showCreateDialog() {
+            final ctrl = TextEditingController();
+            showDialog(context: context, builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF1E1E2C),
+              title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),
+              content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey))),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (ctrl.text.isNotEmpty) {
+                      await _supabase.createPlaylist(name: ctrl.text);
+                      if (mounted) { Navigator.pop(ctx); _loadPlaylists(); }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                  child: const Text('Створити'),
+                ),
+              ],
+            ));
+          }
+          @override Widget build(BuildContext context) {
+            return RefreshIndicator(
+              onRefresh: _loadPlaylists,
+              child: CustomScrollView(
+                slivers: [
+                  const SliverAppBar(floating: true, backgroundColor: Colors.black, title: Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        if (index == 0) return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Row(children: [
+                              IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF6C63FF)), onPressed: _loadPlaylists),
+                              IconButton(icon: const Icon(Icons.add, color: Color(0xFF6C63FF)), onPressed: _showCreateDialog),
+                            ])
+                          ],
+                        );
+                        if (_loading) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))));
+                        if (_playlists.isEmpty) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть перший плейлист!', style: TextStyle(color: Color(0xFF6C63FF))))));                        
+                        final p = _playlists[index - 1];
+                        return ListTile(
+                          leading: const Icon(Icons.playlist_play, color: Color(0xFF6C63FF)),
+                          title: Text(p.name, style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
+                        );
+                      }, childCount: _loading || _playlists.isEmpty ? 2 : _playlists.length + 1),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        EOF
         PROF_FILE=$(find lib -name "profile_tab.dart" -type f | head -n 1)
         if [ -z "$PROF_FILE" ]; then PROF_FILE="lib/features/home/presentation/screens/profile_tab.dart"; mkdir -p $(dirname "$PROF_FILE"); fi
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpzdXBhYmFzZV9mbHV0dGVyL3N1cGFiYXNlX2ZsdXR0ZXIuZGFydCc7CmltcG9ydCAncGFja2FnZTpvcGVud2F2ZS9mZWF0dXJlcy9nYW1pZmljYXRpb24vcHJlc2VudGF0aW9uL3NjcmVlbnMvZGFpbHlfcmV3YXJkX3NjcmVlbi5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOm9wZW53YXZlL2ZlYXR1cmVzL2dhbWlmaWNhdGlvbi9wcmVzZW50YXRpb24vc2NyZWVucy9zcGluX3doZWVsX3NjcmVlbi5kYXJ0JzsKaW1wb3J0ICdwYWNrYWdlOm9wZW53YXZlL2ZlYXR1cmVzL2dhbWlmaWNhdGlvbi9wcmVzZW50YXRpb24vc2NyZWVucy9hY2hpZXZlbWVudHNfc2NyZWVuLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6b3BlbndhdmUvZmVhdHVyZXMvcmFkaW8vcHJlc2VudGF0aW9uL3NjcmVlbnMvcmFkaW9fc2NyZWVuLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6b3BlbndhdmUvZmVhdHVyZXMvY2hhdC9wcmVzZW50YXRpb24vc2NyZWVucy9jaGF0X2xpc3Rfc2NyZWVuLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6b3BlbndhdmUvY29yZS9zZXJ2aWNlcy9zdXBhYmFzZV9zZXJ2aWNlLmRhcnQnOwovLyBSRVBMQUNFX0FETUlOX0lNUE9SVAoKY2xhc3MgUHJvZmlsZVRhYiBleHRlbmRzIFN0YXRlbGVzc1dpZGdldCB7CiAgY29uc3QgUHJvZmlsZVRhYih7c3VwZXIua2V5fSk7CgogIEBvdmVycmlkZQogIFdpZGdldCBidWlsZChCdWlsZENvbnRleHQgY29udGV4dCkgewogICAgZmluYWwgdXNlciA9IFN1cGFiYXNlLmluc3RhbmNlLmNsaWVudC5hdXRoLmN1cnJlbnRVc2VyOwogICAgZmluYWwgZW1haWwgPSB1c2VyPy5lbWFpbCA/PyAn0JrQvtGA0LjRgdGC0YPQstCw0YcnOwogICAgCiAgICByZXR1cm4gU2NhZmZvbGQoCiAgICAgIGJhY2tncm91bmRDb2xvcjogQ29sb3JzLmJsYWNrLAogICAgICBhcHBCYXI6IEFwcEJhcigKICAgICAgICB0aXRsZTogY29uc3QgVGV4dCgn0J/RgNC+0YTRltC70YwnLCBzdHlsZTogVGV4dFN0eWxlKGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQuYm9sZCwgY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgIGJhY2tncm91bmRDb2xvcjogQ29sb3JzLmJsYWNrLAogICAgICAgIGFjdGlvbnM6IFsKICAgICAgICAgIEljb25CdXR0b24oCiAgICAgICAgICAgIGljb246IGNvbnN0IEljb24oSWNvbnMubG9nb3V0LCBjb2xvcjogQ29sb3JzLnJlZEFjY2VudCksCiAgICAgICAgICAgIG9uUHJlc3NlZDogKCkgPT4gU3VwYWJhc2UuaW5zdGFuY2UuY2xpZW50LmF1dGguc2lnbk91dCgpLAogICAgICAgICAgKQogICAgICAgIF0KICAgICAgKSwKICAgICAgYm9keTogTGlzdFZpZXcoCiAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5hbGwoMTYpLAogICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICBjb25zdCBDZW50ZXIoY2hpbGQ6IENpcmNsZUF2YXRhcihyYWRpdXM6IDUwLCBiYWNrZ3JvdW5kQ29sb3I6IENvbG9yKDB4RkY2QzYzRkYpLCBjaGlsZDogSWNvbihJY29ucy5wZXJzb24sIHNpemU6IDUwLCBjb2xvcjogQ29sb3JzLndoaXRlKSkpLAogICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAyMCksCiAgICAgICAgICBDZW50ZXIoY2hpbGQ6IFRleHQoZW1haWwsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoZm9udFNpemU6IDIwLCBmb250V2VpZ2h0OiBGb250V2VpZ2h0LmJvbGQsIGNvbG9yOiBDb2xvcnMud2hpdGUpKSksCiAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDQwKSwKICAgICAgICAgIF9idWlsZE5hdkNhcmQoY29udGV4dCwgSWNvbnMuY2FyZF9naWZ0Y2FyZCwgJ9Cp0L7QtNC10L3QvdCwINC90LDQs9C+0YDQvtC00DAnLCBDb2xvcnMub3JhbmdlLCBjb25zdCBEYWlseVJld2FyZFNjcmVlbigpKSwKICAgICAgICAgIF9idWlsZE5hdkNhcmQoY29udGV4dCwgSWNvbnMuY2FzaW5vLCAn0JrQvtC70LXRgdC+INCk0L7RgNGC0YPQvdC4JywgQ29sb3JzLnBpbmssIGNvbnN0IFNwaW5XaGVlbFNjcmVlbigpKSwKICAgICAgICAgIF9idWlsZE5hdkNhcmQoY29udGV4dCwgSWNvbnMuZW1vamlfZXZlbnRzLCAn0JTQvtGB0Y/Qs9C90LXQvdC90Y8nLCBDb2xvcnMucHVycGxlLCBjb25zdCBBY2hpZXZlbWVudHNTY3JlZW4oKSksCiAgICAgICAgICBfYnVpbGROYXZDYXJkKGNvbnRleHQsIEljb25zLnJhZGlvLCAnT3BlbldhdmUg0KDQsNC00ZbQvicsIENvbG9ycy5ibHVlLCBjb25zdCBSYWRpb1NjcmVlbigpKSwKICAgICAgICAgIF9idWlsZE5hdkNhcmQoY29udGV4dCwgSWNvbnMuY2hhdCwgJ9Cf0L7QstGW0LTQvtC80LvQtdC90L3RjyAo0J/RltC00YLRgNC40LzQutCwKScsIENvbG9ycy50ZWFsLCBjb25zdCBDaGF0TGlzdFNjcmVlbigpKSwKICAgICAgICAgIGNvbnN0IERpdmlkZXIoY29sb3I6IENvbG9ycy5ncmV5LCBoZWlnaHQ6IDQwKSwKICAgICAgICAgIC8vIEFETUlOIEJVVFRPTgogICAgICAgICAgRnV0dXJlQnVpbGRlcjxib29sPigKICAgICAgICAgICAgZnV0dXJlOiBTdXBhYmFzZVNlcnZpY2UoKS5pc0FkbWluKCksCiAgICAgICAgICAgIGJ1aWxkZXI6IChjb250ZXh0LCBzbmFwc2hvdCkgewogICAgICAgICAgICAgIGlmIChzbmFwc2hvdC5kYXRhID09IHRydWUpIHsKICAgICAgICAgICAgICAgIHJldHVybiBMaXN0VGlsZSgKICAgICAgICAgICAgICAgICAgbGVhZGluZzogY29uc3QgSWNvbjxJY29uRGF0YT4oSWNvbnMuY2xvdWRfdXBsb2FkLCBjb2xvcjogQ29sb3JzLmdyZWVuKSwKICAgICAgICAgICAgICAgICAgdGl0bGU6IGNvbnN0IFRleHQoJ9CX0LDQstCw0L3RgtCw0LbRgtC4INGC0YDQtdC6ICjQkNC00LzRltC9KScsIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5ncmVlbiwgZm9udFdlaWdodDogRm9udFdlaWdodC5ib2xkKSksCiAgICAgICAgICAgICAgICAgIG9uVGFwOiAoKSB7CiAgICAgICAgICAgICAgICAgICAgdHJ5IHsgTmF2aWdhdG9yLnB1c2goY29udGV4dCwgTWF0ZXJpYWxQYWdlUm91dGUoYnVpbGRlcjogKF8pID0+IGNvbnN0IEFkbWluU2NyZWVuKCkpKTsgfQogICAgICAgICAgICAgICAgICAgIGNhdGNoIChlKSB7IFNjYWZmb2xkTWVzc2VuZ2VyLm9mKGNvbnRleHQpLnNob3dTbmFja0Jhcihjb25zdCBTbmFja0Jhcihjb250ZW50OiBUZXh0KCfQldC60YDQsNC9INCQ0LTQvNGW0L3QsCDQvdC10LTQvtGB0YLRg9C/0L3QuNC5JykpKTsgfQogICAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgKTsKICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgcmV0dXJuIGNvbnN0IFNpemVkQm94LnNocmluaygpOwogICAgICAgICAgICB9CiAgICAgICAgICApLAogICAgICAgIF0sCiAgICAgICksCiAgICApOwogIH0KCiAgV2lkZ2V0IF9idWlsZE5hdkNhcmQoQnVpbGRDb250ZXh0IGNvbnRleHQsIEljb25EYXRhIGljb24sIFN0cmluZyB0aXRsZSwgQ29sb3IgY29sb3IsIFdpZGdldCBkZXN0aW5hdGlvbikgewogICAgcmV0dXJuIENhcmQoCiAgICAgIGNvbG9yOiBjb25zdCBDb2xvcigweEZGMUUxRTJDKSwKICAgICAgbWFyZ2luOiBjb25zdCBFZGdlSW5zZXRzLm9ubHkoYm90dG9tOiAxMiksCiAgICAgIGNoaWxkOiBMaXN0VGlsZSgKICAgICAgICBsZWFkaW5nOiBJY29uKGljb24sIGNvbG9yOiBjb2xvciksCiAgICAgICAgdGl0bGU6IFRleHQodGl0bGUsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy53aGl0ZSkpLAogICAgICAgIHRyYWlsaW5nOiBjb25zdCBJY29uPEljb25EYXRhPihJY29ucy5hcnJvd19mb3J3YXJkX2lvcywgY29sb3I6IENvbG9ycy5ncmV5LCBzaXplOiAxNiksCiAgICAgICAgb25UYXA6ICgpID0+IE5hdmlnYXRvci5wdXNoKGNvbnRleHQsIE1hdGVyaWFsUGFnZVJvdXRlKGJ1aWxkZXI6IChfKSA9PiBkZXN0aW5hdGlvbikpLAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > "$PROF_FILE"
+        cat << 'EOF' > "$PROF_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:supabase_flutter/supabase_flutter.dart';
+        import 'package:openwave/features/gamification/presentation/screens/daily_reward_screen.dart';
+        import 'package:openwave/features/gamification/presentation/screens/spin_wheel_screen.dart';
+        import 'package:openwave/features/gamification/presentation/screens/achievements_screen.dart';
+        import 'package:openwave/features/radio/presentation/screens/radio_screen.dart';
+        import 'package:openwave/features/chat/presentation/screens/chat_list_screen.dart';
+        import 'package:openwave/core/services/supabase_service.dart';
+        // REPLACE_ADMIN_IMPORT
+        class ProfileTab extends StatelessWidget {
+          const ProfileTab({super.key});
+          @override
+          Widget build(BuildContext context) {
+            final user = Supabase.instance.client.auth.currentUser;
+            final email = user?.email ?? 'Користувач';            
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                title: const Text('Профіль', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                backgroundColor: Colors.black,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.redAccent),
+                    onPressed: () => Supabase.instance.client.auth.signOut(),
+                  )
+                ]
+              ),
+              body: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Center(child: CircleAvatar(radius: 50, backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.person, size: 50, color: Colors.white))),
+                  const SizedBox(height: 20),
+                  Center(child: Text(email, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
+                  const SizedBox(height: 40),
+                  _buildNavCard(context, Icons.card_giftcard, 'Щоденна нагорода', Colors.orange, const DailyRewardScreen()),
+                  _buildNavCard(context, Icons.casino, 'Колесо Фортуни', Colors.pink, const SpinWheelScreen()),
+                  _buildNavCard(context, Icons.emoji_events, 'Досягнення', Colors.purple, const AchievementsScreen()),
+                  _buildNavCard(context, Icons.radio, 'OpenWave Радіо', Colors.blue, const RadioScreen()),
+                  _buildNavCard(context, Icons.chat, 'Повідомлення (Підтримка)', Colors.teal, const ChatListScreen()),
+                  const Divider(color: Colors.grey, height: 40),
+                  FutureBuilder<bool>(
+                    future: SupabaseService().isAdmin(),
+                    builder: (context, snapshot) {
+                      if (snapshot.data == true) {
+                        return ListTile(
+                          leading: const Icon(Icons.cloud_upload, color: Colors.green),
+                          title: const Text('Завантажити трек (Адмін)', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                          onTap: () {
+                            try { Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())); }
+                            catch (e) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Екран Адміна недоступний'))); }
+                          },
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }
+                  ),
+                ],
+              ),
+            );
+          }
+          Widget _buildNavCard(BuildContext context, IconData icon, String title, Color color, Widget destination) {
+            return Card(
+              color: const Color(0xFF1E1E2C),
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: Icon(icon, color: color),
+                title: Text(title, style: const TextStyle(color: Colors.white)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => destination)),
+              ),
+            );
+          }
+        }
+        EOF
         MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
-        if [ -z "$MAIN_FILE" ]; then MAIN_FILE="lib/features/home/presentation/screens/main_screen.dart"; mkdir -p $(dirname "$MAIN_FILE"); fi                
-        echo "aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CmltcG9ydCAncGFja2FnZTpqdXN0X2F1ZGlvX2JhY2tncm91bmQvanVzdF9hdWRpb19iYWNrZ3JvdW5kLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6c3VwYWJhc2VfZmx1dHRlci9zdXBhYmFzZV9mbHV0dGVyLmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6b3BlbndhdmUvZmVhdHVyZXMvYXV0aC9wcmVzZW50YXRpb24vc2NyZWVucy9zaW1wbGVfYXV0aF9zY3JlZW4uZGFydCc7Ci8vIFJFUExBQ0VfTUFJTl9JTVBPUlQKCndvaWQgbWFpbigpIGFzeW5jIHsKICBXaWRnZXRzRmx1dHRlckJpbmRpbmcuZW5zdXJlSW5pdGlhbGl6ZWQoKTsKICAKICB0cnkgewogICAgYXdhaXQgU3VwYWJhc2UuaW5pdGlhbGl6ZSgKICAgICAgdXJsOiAnaHR0cHM6Ly9ubW93bGtqb3JhZ25mZmt4YnJ6cS5zdXBhYmFzZS5jbycsCiAgICAgIGFub25LZXk6ICdleUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKcGMzTWlPaUp6ZFhCaFltRnpaSUlzSW5KbGZpSTZJbTV0YjNkc2EycHZjbUZuYm1abWEydDRZbko2Y1NJc0luSnZiR1VpT2lKaGMyOXVJaXdpYVdGMElqb3hOemN6TURrMk1qWTNMQ0psZUd3aU9qSXdPRGcyTnpJeU5qZDkueU5IVHlaZlhPanktbEpOeENPbThGOV9ZVkdXRjZrR1dtdWVGWUJIVGZJMScsCiAgICApOwogIH0gY2F0Y2ggKGUpIHsKICAgIGRlYnVnUHJpbnQoJ1N1cGFiYXNlIGluaXQgZXJyb3I6ICRlJyk7CiAgfQoKICB0cnkgewogICAgYXdhaXQgSnVzdEF1ZGlvQmFja2dyb3VuZC5pbml0KAogICAgICBhbmRyb2lkTm90aWZpY2F0aW9uQ2hhbm5lbElkOiAnY29tLm9wZW53YXZlLmFwcC5hdWRpbycsCiAgICAgIGFuZHJvaWROb3RpZmljYXRpb25DaGFubmVsTmFtZTogJ0F1ZGlvIHBsYXliYWNrJywKICAgICAgYW5kcm9pZE5vdGlmaWNhdGlvbk9uZ29pbmc6IHRydWUsCiAgICApOwogIH0gY2F0Y2ggKGUpIHsKICAgIGRlYnVnUHJpbnQoJ0F1ZGlvIGluaXQgZXJyb3I6ICRlJyk7CiAgfQoKICBFcnJvcldpZGdldC5idWlsZGVyID0gKEZsdXR0ZXJFcnJvckRldGFpbHMgZGV0YWlscykgewogICAgcmV0dXJuIE1hdGVyaWFsQXBwKAogICAgICBob21lOiBTY2FmZm9sZCgKICAgICAgICBiYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgICBib2R5OiBDZW50ZXIoCiAgICAgICAgICBjaGlsZDogU2luZ2xlQ2hpbGRTY3JvbGxWaWV3KAogICAgICAgICAgICBwYWRkaW5nOiBjb25zdCBFZGdlSW5zZXRzLmFsbCgyMCksCiAgICAgICAgICAgIGNoaWxkOiBUZXh0KCfQodCY0KHQotCV0JzQndCQINCf0J7QnNCY0JvQmtCBOlxcbiR7ZGV0YWlscy5leGNlcHRpb25Bc1N0cmluZygpfScsIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoY29sb3I6IENvbG9ycy5yZWRBY2NlbnQsIGZvbnRTaXplOiAxNikpLAogICAgICAgICAgKSwKICAgICAgICApLAogICAgICApLAogICAgKTsKICB9OwoKICBydW5BcHAoY29uc3QgT3BlbldhdmVBcHAoKSk7Cn0KCgpjbGFzcyBPcGVuV2F2ZUFwcCBleHRlbmRzIFN0YXRlbGVzc1dpZGdldCB7CiAgY29uc3QgT3BlbldhdmVBcHAoe3N1cGVyLmtleX0pOwoKICBAb3ZlcnJpZGUKICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHsKICAgIHJldHVybiBNYXRlcmlhbEFwcCgKICAgICAgdGl0bGU6ICdPcGVuV2F2ZScsCiAgICAgIGRlYnVnU2hvd0NoZWNrZWRNb2RlQmFubmVyOiBmYWxzZSwKICAgICAgdGhlbWU6IFRoZW1lRGF0YS5kYXJrKCkuY29weVdpdGgoCiAgICAgICAgc2NhZmZvbGRCYWNrZ3JvdW5kQ29sb3I6IENvbG9ycy5ibGFjaywKICAgICAgICBwcmltYXJ5Q29sb3I6IGNvbnN0IENvbG9yKDB4RkY2QzYzRkYpLAogICAgICApLAogICAgICBob21lOiBTdHJlYW1CdWlsZGVyPEF1dGhTdGF0ZT4oCiAgICAgICAgc3RyZWFtOiBTdXBhYmFzZS5pbnN0YW5jZS5jbGllbnQuYXV0aC5vbkF1dGhTdGF0ZUNoYW5nZSwKICAgICAgICBidWlsZGVyOiAoY29udGV4dCwgc25hcHNob3QpIHsKICAgICAgICAgIGZpbmFsIHNlc3Npb24gPSBzbmFwc2hvdC5kYXRhPy5zZXNzaW9uOwogICAgICAgICAgICAgICAgaWYgKHNlc3Npb24gIT0gbnVsbCkgewogICAgICAgICAgICByZXR1cm4gY29uc3QgTWFpblNjcmVlbigpOwogICAgICAgICAgfQogICAgICAgICAgcmV0dXJuIGNvbnN0IFNpbXBsZUF1dGhTY3JlZW4oKTsKICAgICAgICB9LAogICAgICApLAogICAgKTsKICB9Cn0=" | base64 -d > lib/main.dart        
+        if [ -z "$MAIN_FILE" ]; then MAIN_FILE="lib/features/home/presentation/screens/main_screen.dart"; mkdir -p $(dirname "$MAIN_FILE"); fi
+        cat << 'EOF' > "$MAIN_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/services/simple_audio_service.dart';
+        import 'package:openwave/core/models/track_model.dart';
+        import 'package:openwave/features/player/presentation/screens/full_player_screen.dart';
+        // REPLACE_HOME_IMPORT
+        // REPLACE_LIB_IMPORT
+        // REPLACE_PROF_IMPORT
+        class MainScreen extends StatefulWidget {
+          final Widget? child;
+          const MainScreen({super.key, this.child});
+          @override State<MainScreen> createState() => _MainScreenState();
+        }
+        class _MainScreenState extends State<MainScreen> {
+          int _currentIndex = 0;
+          final List<Widget> _pages = [const HomeTab(), const LibraryTab(), const ProfileTab()];
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              body: Stack(
+                children: [
+                  Positioned.fill(child: IndexedStack(index: _currentIndex, children: _pages)),
+                  Positioned(
+                    bottom: 0, left: 0, right: 0,
+                    child: ValueListenableBuilder<TrackModel?>(
+                      valueListenable: SimpleAudioService().currentTrack,
+                      builder: (context, track, child) {
+                        if (track == null) return const SizedBox.shrink();
+                        return GestureDetector(
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => FullPlayerScreen(track: track),
+                            );
+                          },
+                          child: Container(
+                            height: 65,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2C2C3E),
+                              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.music_note, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                StreamBuilder<bool>(
+                                  stream: SimpleAudioService().player.playingStream,
+                                  builder: (context, snapshot) {
+                                    final isPlaying = snapshot.data ?? false;
+                                    return IconButton(
+                                      icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36),
+                                      onPressed: () => SimpleAudioService().togglePlayPause(),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              bottomNavigationBar: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (i) => setState(() => _currentIndex = i),
+                backgroundColor: const Color(0xFF1E1E2C),
+                selectedItemColor: const Color(0xFF6C63FF),
+                unselectedItemColor: Colors.grey,
+                items: const [
+                  BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Головна'),
+                  BottomNavigationBarItem(icon: Icon(Icons.library_music), label: 'Бібліотека'),
+                  BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Профіль'),
+                ],
+              ),
+            );
+          }
+        }
+        EOF
+        HOME_PATH=$(echo "$HOME_FILE" | sed 's|lib/||')
+        LIB_PATH=$(echo "$LIB_FILE" | sed 's|lib/||')
+        PROF_PATH=$(echo "$PROF_FILE" | sed 's|lib/||')
+        ADMIN_FILE=$(find lib -name "admin_screen.dart" -type f | head -n 1)
+        if [ ! -z "$ADMIN_FILE" ]; then
+          ADMIN_PATH=$(echo "$ADMIN_FILE" | sed 's|lib/||')
+          sed -i "s|// REPLACE_ADMIN_IMPORT|import 'package:openwave/$ADMIN_PATH';|g" "$PROF_FILE"
+        fi
+        sed -i "s|// REPLACE_HOME_IMPORT|import 'package:openwave/$HOME_PATH';|g" "$MAIN_FILE"
+        sed -i "s|// REPLACE_LIB_IMPORT|import 'package:openwave/$LIB_PATH';|g" "$MAIN_FILE"
+        sed -i "s|// REPLACE_PROF_IMPORT|import 'package:openwave/$PROF_PATH';|g" "$MAIN_FILE"
+    - name: STEP 9 - Core Init with Working Supabase & Auth
+      run: |
+        cd ${{ env.FLUTTER_DIR }}
+        MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
+        MAIN_PATH=$(echo "$MAIN_FILE" | sed 's|lib/||')        
+        cat << 'EOF' > lib/main.dart
+        import 'package:flutter/material.dart';
+        import 'package:just_audio_background/just_audio_background.dart';
+        import 'package:supabase_flutter/supabase_flutter.dart';
+        import 'package:openwave/features/auth/presentation/screens/simple_auth_screen.dart';
+        // REPLACE_MAIN_IMPORT        
+        void main() async {
+          WidgetsFlutterBinding.ensureInitialized();          
+          try {
+            await Supabase.initialize(
+              url: 'https://nmowlkjoragnffkxbrzq.supabase.co',
+              anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYyNjcsImV4cCI6MjA4ODY3MjI2N30.yNHTyZfXOjy-lJNxCOm8F9_YVGWF6kGWmueFYBHTfI0',
+            );
+          } catch (e) {
+            debugPrint('Supabase init error: $e');
+          }
+          try {
+            await JustAudioBackground.init(
+              androidNotificationChannelId: 'com.openwave.app.audio',
+              androidNotificationChannelName: 'Audio playback',
+              androidNotificationOngoing: true,
+            );
+          } catch (e) {
+            debugPrint('Audio init error: $e');
+          }
+          ErrorWidget.builder = (FlutterErrorDetails details) {
+            return MaterialApp(
+              home: Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Text('СИСТЕМНА ПОМИЛКА:\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),
+                  ),
+                ),
+              ),
+            );
+          };
+          runApp(const OpenWaveApp());
+        }
+        class OpenWaveApp extends StatelessWidget {
+          const OpenWaveApp({super.key});
+          @override
+          Widget build(BuildContext context) {
+            return MaterialApp(
+              title: 'OpenWave',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData.dark().copyWith(
+                scaffoldBackgroundColor: Colors.black,
+                primaryColor: const Color(0xFF6C63FF),
+              ),
+              home: StreamBuilder<AuthState>(
+                stream: Supabase.instance.client.auth.onAuthStateChange,
+                builder: (context, snapshot) {
+                  final session = snapshot.data?.session;
+                  if (session != null) {
+                    return const MainScreen(); // КОРИСТУВАЧ АВТОРИЗОВАНИЙ
+                  }
+                  return const SimpleAuthScreen(); // ПОТРІБНА АВТОРИЗАЦІЯ
+                },
+              ),
+            );
+          }
+        }
+        EOF        
         sed -i "s|// REPLACE_MAIN_IMPORT|import 'package:openwave/$MAIN_PATH';|g" lib/main.dart
-    - name: STEP 11 - Build Ready APK
+    - name: STEP 10 - Build Ready APK
       run: |
         cd ${{ env.FLUTTER_DIR }}
         flutter pub get
         dart run build_runner build --delete-conflicting-outputs || true
         flutter build apk --release
-    - name: STEP 12 - Final Artifact Upload
+    - name: STEP 11 - Final Artifact Upload
       uses: actions/upload-artifact@v4
       with:
         name: OpenWave-Final-App
