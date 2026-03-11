@@ -168,42 +168,42 @@ jobs:
 
             pstr = ",\n        ".join([f"BlocProvider<{b}>(create: (_) => getIt<{b}>())" for b in blocs])
 
-            wrapper = f"""
-class GlobalAppWrapper extends StatelessWidget {{
-  final Widget child;
-  const GlobalAppWrapper({{super.key, required this.child}});
-  @override
-  Widget build(BuildContext context) {{
-    return MultiBlocProvider(
-      providers: [
-        {pstr}
-      ],
-      child: child,
-    );
-  }}
-}}
-"""
+            wrapper = (
+                "\nclass GlobalAppWrapper extends StatelessWidget {\n"
+                "  final Widget child;\n"
+                "  const GlobalAppWrapper({super.key, required this.child});\n"
+                "  @override\n"
+                "  Widget build(BuildContext context) {\n"
+                "    return MultiBlocProvider(\n"
+                "      providers: [\n"
+                "        " + pstr + "\n"
+                "      ],\n"
+                "      child: child,\n"
+                "    );\n"
+                "  }\n"
+                "}\n"
+            )
             mtxt += "\n" + wrapper
             mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
 
-            shield = """
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),
-              style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ),
-    );
-  };
-"""
+            shield = (
+                "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
+                "    return MaterialApp(\n"
+                "      home: Scaffold(\n"
+                "        backgroundColor: Colors.white,\n"
+                "        body: SafeArea(\n"
+                "          child: SingleChildScrollView(\n"
+                "            padding: const EdgeInsets.all(16),\n"
+                "            child: Text(\n"
+                "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
+                "              style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),\n"
+                "            ),\n"
+                "          ),\n"
+                "        ),\n"
+                "      ),\n"
+                "    );\n"
+                "  };\n"
+            )
             mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
 
             with open(main_p, 'w', encoding='utf-8') as f:
