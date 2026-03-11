@@ -148,10 +148,7 @@ jobs:
                 txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
                 txt = txt.replace("json['isAdmin']", "json['is_admin']")
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
-                
-                # Безпечне видалення DriftNativeOptions без помилок парсера
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\(.*?\)\s*,?', '', txt, flags=re.DOTALL)
-                
                 txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
                 txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
                 txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
@@ -428,49 +425,11 @@ jobs:
                             label: const Text('Завантажити в ефір (Адмін)', style: TextStyle(color: Colors.white)),
                             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Папка radio_tracks готова'))),
                           );
-                        }                        return const SizedBox.shrink();
+                        }
+                        return const SizedBox.shrink();
                       },
                     )
-                  ],
-                ),
-              ),
-            );
-          }
-        }
-        EOF
-        
-        cat << "EOF" > lib/features/chat/presentation/screens/chat_list_screen.dart
-        import 'package:flutter/material.dart';
-
-        class ChatListScreen extends StatelessWidget {
-          const ChatListScreen({super.key});
-
-          @override
-          Widget build(BuildContext context) {
-            return Scaffold(
-              backgroundColor: Colors.black,
-              appBar: AppBar(
-                title: const Text('Повідомлення', style: TextStyle(color: Colors.white)),
-                backgroundColor: Colors.black,
-                iconTheme: const IconThemeData(color: Colors.white),
-              ),
-              body: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  ListTile(
-                    leading: const CircleAvatar(backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.support_agent, color: Colors.white)),
-                    title: const Text('Технічна підтримка / Адмін', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Привіт! Чим можемо допомогти?', style: TextStyle(color: Colors.grey)),
-                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Чат в розробці...'))),
-                  ),
-                ],
-              ),
-            );
-          }
-        }
-        EOF
-
-    - name: STEP 8 - Core UI, AUDIO URL FIX & Auth Screen
+               - name: STEP 8 - Core UI, AUDIO URL FIX & Auth Screen
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
@@ -544,7 +503,7 @@ jobs:
                       TextButton(
                         onPressed: () => setState(() => _isLogin = !_isLogin),
                         child: Text(_isLogin ? 'Немає акаунту? Зареєструватися' : 'Вже є акаунт? Увійти', style: const TextStyle(color: Colors.grey)),
-                                              )
+                      )
                     ],
                   ),
                 ),
@@ -800,7 +759,8 @@ jobs:
           }
         }
         EOF
-                LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
+
+        LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
         if [ -z "$LIB_FILE" ]; then LIB_FILE="lib/features/home/presentation/screens/library_tab.dart"; mkdir -p $(dirname "$LIB_FILE"); fi
         cat << "EOF" > "$LIB_FILE"
         import 'package:flutter/material.dart';
@@ -868,7 +828,7 @@ jobs:
                         if (index == 0) return Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                                             const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                             Row(children: [
                               IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF6C63FF)), onPressed: _loadPlaylists),
                               IconButton(icon: const Icon(Icons.add, color: Color(0xFF6C63FF)), onPressed: _showCreateDialog),
@@ -925,7 +885,7 @@ jobs:
                   IconButton(
                     icon: const Icon(Icons.logout, color: Colors.redAccent),
                     onPressed: () => Supabase.instance.client.auth.signOut(),
-                                      )
+                  )
                 ]
               ),
               body: ListView(
@@ -1184,4 +1144,3 @@ jobs:
       with:
         name: OpenWave-Final-App
         path: "**/build/app/outputs/flutter-apk/*.apk"
-    
