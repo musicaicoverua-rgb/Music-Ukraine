@@ -89,195 +89,278 @@ jobs:
         </resources>
         EOF
 
-    - name: STEP 6 - Code Doctor (Safe String Injection)
+    - name: STEP 6 - Code Doctor (Admin Buttons & Navigation)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         cat << 'EOF' > fix_app.py
         import os, re
 
-        def fix_all():
-            for root, _, files in os.walk('lib'):
-                for f in files:
-                    if not f.endswith('.dart'): continue
+        # --- 1. CORE SYNTAX FIXES ---
+        def drift_rep(m):
+            t, c = m.group(1), m.group(2)
+            if 'Companion' in c:
+                id_m = re.search(r'id:\s*Value\((.*?)\)', c)
+                if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
+            return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
+
+        for root, _, files in os.walk('lib'):
+            for f in files:
+                if not f.endswith('.dart'): continue
+                p = os.path.join(root, f)
+                with open(p, 'r', encoding='utf-8') as file:
+                    txt = file.read()
+                orig = txt
+                
+                txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
+                txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
+                txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
+                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
+                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
+                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
+                txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
+                
+                txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
+                txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
+                txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
+                txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
+                txt = txt.replace("currentTrack: () => null", "currentTrack: null")
+                
+                txt = txt.replace("json['isAdmin']", "json['is_admin']")
+                txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
+                txt = txt.replace("json['admin']", "json['is_admin']")
+                txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
+                
+                # ADDING ADMIN UPLOAD BUTTON TO MAIN SCREEN
+                if f == 'main_screen.dart':
+                    if 'floatingActionButton' not in txt:
+                        imports = (
+                            "import 'package:openwave/core/services/supabase_service.dart';\n"
+                            "import 'package:openwave/features/admin/presentation/screens/admin_screen.dart';\n"
+                        )
+                        txt = imports + txt
+                        
+                        fab = (
+                            "      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(\n"
+                            "        backgroundColor: AppTheme.primaryColor,\n"
+                            "        child: const Icon(Icons.playlist_add, color: Colors.white),\n"
+                            "        onPressed: () {\n"
+                            "          final ctrl = TextEditingController();\n"
+                            "          showDialog(\n"
+                            "            context: context,\n"
+                            "            builder: (ctx) => AlertDialog(\n"
+                            "              backgroundColor: const Color(0xFF1E1E2C),\n"
+                            "              title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),\n"
+                            "              content: TextField(\n"
+                            "                controller: ctrl,\n"
+                            "                style: const TextStyle(color: Colors.white),\n"
+                            "                decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey)),\n"
+                            "              ),\n"
+                            "              actions: [\n"
+                            "                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),\n"
+                            "                ElevatedButton(\n"
+                            "                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),\n"
+                            "                  onPressed: () async {\n"
+                            "                    if (ctrl.text.isNotEmpty) {\n"
+                            "                      try {\n"
+                            "                        await SupabaseService().createPlaylist(name: ctrl.text);\n"
+                            "                        if (context.mounted) {\n"
+                            "                          Navigator.pop(ctx);\n"
+                            "                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Плейлист створено!'), backgroundColor: Colors.green));\n"
+                            "                        }\n"
+                            "                      } catch (e) {\n"
+                            "                        if (context.mounted) Navigator.pop(ctx);\n"
+                            "                      }\n"
+                            "                    }\n"
+                            "                  },\n"
+                            "                  child: const Text('Створити'),\n"
+                            "                ),\n"
+                            "              ],\n"
+                            "            ),\n"
+                            "          );\n"
+                            "        },\n"
+                            "      ) : FutureBuilder<bool>(\n"
+                            "        future: SupabaseService().isAdmin(),\n"
+                            "        builder: (context, snapshot) {\n"
+                            "          if (snapshot.data == true && _currentIndex == 0) {\n"
+                            "            return FloatingActionButton.extended(\n"
+                            "              backgroundColor: Colors.green,\n"
+                            "              icon: const Icon(Icons.cloud_upload, color: Colors.white),\n"
+                            "              label: const Text('Завантажити трек', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),\n"
+                            "              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),\n"
+                            "            );\n"
+                            "          }\n"
+                            "          return const SizedBox.shrink();\n"
+                            "        },\n"
+                            "      ),\n"
+                            "      bottomNavigationBar:"
+                        )
+                        txt = txt.replace("bottomNavigationBar:", fab)
+
+                if orig != txt:
+                    with open(p, 'w', encoding='utf-8') as file:
+                        file.write(txt)
+
+        # --- 2. FIX ANDROID BACKGROUND SERVICE ---
+        for root, _, files in os.walk('android/app/src/main'):
+            for f in files:
+                if f in ['MainActivity.kt', 'MainActivity.java']:
                     p = os.path.join(root, f)
                     with open(p, 'r', encoding='utf-8') as file:
                         txt = file.read()
-                    
-                    orig = txt
-                    
-                    def drift_rep(m):
-                        t, c = m.group(1), m.group(2)
-                        if 'Companion' in c:
-                            id_m = re.search(r'id:\s*Value\((.*?)\)', c)
-                            if id_m: return f"(delete({t})..where((tbl) => tbl.id.equals({id_m.group(1)}))).go();"
-                        return f"(delete({t})..where((tbl) => {c.replace(t+'.', 'tbl.')})).go();"
-                    
-                    txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
-                    txt = txt.replace('DatabaseConnection _openConnection()', 'QueryExecutor _openConnection()')
-                    txt = txt.replace('DatabaseConnection openConnection()', 'QueryExecutor openConnection()')
-                    txt = txt.replace("query = query.eq('genre', genre);", "// eq")
-                    txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
-                    txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
-                    txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
-                    
-                    txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
-                    txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
-                    txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
-                    txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
-                    txt = txt.replace("currentTrack: () => null", "currentTrack: null")
-                    
-                    txt = txt.replace("json['isAdmin']", "json['is_admin']")
-                    txt = txt.replace("json[\"isAdmin\"]", "json[\"is_admin\"]")
-                    txt = txt.replace("json['admin']", "json['is_admin']")
-                    txt = re.sub(r'bool\s+get\s+isAdmin\s*=>\s*[^;]+;', 'bool get isAdmin => true;', txt)
-                    
-                    if f == 'main_screen.dart':
-                        if 'floatingActionButton' not in txt:
-                            txt = "import '../../../../core/services/supabase_service.dart';\n" + txt
-                            fab = (
-                                "      floatingActionButton: _currentIndex == 2 ? FloatingActionButton(\n"
-                                "        backgroundColor: AppTheme.primaryColor,\n"
-                                "        child: const Icon(Icons.playlist_add, color: Colors.white),\n"
-                                "        onPressed: () {\n"
-                                "          final ctrl = TextEditingController();\n"
-                                "          showDialog(\n"
-                                "            context: context,\n"
-                                "            builder: (ctx) => AlertDialog(\n"
-                                "              backgroundColor: const Color(0xFF1E1E2C),\n"
-                                "              title: const Text('Create Playlist', style: TextStyle(color: Colors.white)),\n"
-                                "              content: TextField(\n"
-                                "                controller: ctrl,\n"
-                                "                style: const TextStyle(color: Colors.white),\n"
-                                "                decoration: const InputDecoration(hintText: 'Playlist Name', hintStyle: TextStyle(color: Colors.grey)),\n"
-                                "              ),\n"
-                                "              actions: [\n"
-                                "                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),\n"
-                                "                ElevatedButton(\n"
-                                "                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),\n"
-                                "                  onPressed: () async {\n"
-                                "                    if (ctrl.text.isNotEmpty) {\n"
-                                "                      try {\n"
-                                "                        await SupabaseService().createPlaylist(name: ctrl.text);\n"
-                                "                        if (context.mounted) {\n"
-                                "                          Navigator.pop(ctx);\n"
-                                "                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist created!'), backgroundColor: Colors.green));\n"
-                                "                        }\n"
-                                "                      } catch (e) {\n"
-                                "                        if (context.mounted) Navigator.pop(ctx);\n"
-                                "                      }\n"
-                                "                    }\n"
-                                "                  },\n"
-                                "                  child: const Text('Create'),\n"
-                                "                ),\n"
-                                "              ],\n"
-                                "            ),\n"
-                                "          );\n"
-                                "        },\n"
-                                "      ) : null,\n"
-                                "      bottomNavigationBar:"
-                            )
-                            txt = txt.replace("bottomNavigationBar:", fab)
-                    
-                    if orig != txt:
-                        with open(p, 'w', encoding='utf-8') as file:
-                            file.write(txt)
+                    txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
+                    txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
+                    txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
+                    txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
+                    with open(p, 'w', encoding='utf-8') as file:
+                        file.write(txt)
 
-            for root, _, files in os.walk('android/app/src/main'):
-                for f in files:
-                    if f in ['MainActivity.kt', 'MainActivity.java']:
+        # --- 3. INJECT GLOBAL BLOC PROVIDERS ---
+        main_p = 'lib/main.dart'
+        if os.path.exists(main_p):
+            with open(main_p, 'r', encoding='utf-8') as f:
+                mtxt = f.read()
+            if 'GlobalAppWrapper' not in mtxt:
+                blocs = set()
+                imports = set()
+                for root, _, files in os.walk('lib'):
+                    for f in files:
+                        if not f.endswith('.dart'): continue
                         p = os.path.join(root, f)
-                        with open(p, 'r', encoding='utf-8') as file:
-                            txt = file.read()
-                        txt = txt.replace('io.flutter.embedding.android.FlutterActivity', 'com.ryanheise.audioservice.AudioServiceActivity')
-                        txt = txt.replace('class MainActivity: FlutterActivity', 'class MainActivity: AudioServiceActivity')
-                        txt = txt.replace('class MainActivity : FlutterActivity', 'class MainActivity : AudioServiceActivity')
-                        txt = txt.replace('extends FlutterActivity', 'extends AudioServiceActivity')
-                        with open(p, 'w', encoding='utf-8') as file:
-                            file.write(txt)
-            
-            main_p = 'lib/main.dart'
-            if os.path.exists(main_p):
-                with open(main_p, 'r', encoding='utf-8') as f:
-                    mtxt = f.read()
-                    
-                if 'GlobalAppWrapper' not in mtxt:
-                    blocs = set()
-                    imports = set()
-                    for root, _, files in os.walk('lib'):
-                        for f in files:
-                            if not f.endswith('.dart'): continue
-                            p = os.path.join(root, f)
-                            with open(p, 'r', encoding='utf-8') as f2:
-                                for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
-                                    blocs.add(b)
-                                    imports.add("import 'package:openwave/" + p.replace(os.sep, '/').replace('lib/', '') + "';\n")
-                    
-                    istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
-                    for i in imports:
-                        if i not in mtxt: istr += i
-                    mtxt = istr + mtxt
-                    
-                    pstr = ",\n        ".join(["BlocProvider<" + b + ">(create: (_) => getIt<" + b + ">())" for b in blocs])
-                    
-                    wrapper = (
-                        "\nclass GlobalAppWrapper extends StatelessWidget {\n"
-                        "  final Widget child;\n"
-                        "  const GlobalAppWrapper({super.key, required this.child});\n"
-                        "  @override\n"
-                        "  Widget build(BuildContext context) {\n"
-                        "    return MultiBlocProvider(\n"
-                        "      providers: [\n"
-                        "        " + pstr + "\n"
-                        "      ],\n"
-                        "      child: child,\n"
-                        "    );\n"
-                        "  }\n"
-                        "}\n"
-                    )
+                        with open(p, 'r', encoding='utf-8') as f2:
+                            for b in re.findall(r'class\s+([A-Za-z0-9_]+Bloc)\s+extends', f2.read()):
+                                blocs.add(b)
+                                imports.add("import 'package:openwave/" + p.replace(os.sep, '/').replace('lib/', '') + "';\n")
+                istr = "import 'package:flutter_bloc/flutter_bloc.dart';\n"
+                for i in imports:
+                    if i not in mtxt: istr += i
+                mtxt = istr + mtxt
+                pstr = ",\n        ".join(["BlocProvider<" + b + ">(create: (_) => getIt<" + b + ">())" for b in blocs])
+                wrapper = (
+                    "\nclass GlobalAppWrapper extends StatelessWidget {\n"
+                    "  final Widget child;\n"
+                    "  const GlobalAppWrapper({super.key, required this.child});\n"
+                    "  @override\n"
+                    "  Widget build(BuildContext context) {\n"
+                    "    return MultiBlocProvider(\n"
+                    "      providers: [\n"
+                    "        " + pstr + "\n"
+                    "      ],\n"
+                    "      child: child,\n"
+                    "    );\n"
+                    "  }\n"
+                    "}\n"
+                )
+                mtxt += "\n" + wrapper
+                mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
+                shield = (
+                    "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
+                    "    return MaterialApp(\n"
+                    "      home: Scaffold(\n"
+                    "        backgroundColor: const Color(0xFFFFFFFF),\n"
+                    "        body: SafeArea(\n"
+                    "          child: SingleChildScrollView(\n"
+                    "            padding: const EdgeInsets.all(16),\n"
+                    "            child: Text(\n"
+                    "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
+                    "              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),\n"
+                    "            ),\n"
+                    "          ),\n"
+                    "        ),\n"
+                    "      ),\n"
+                    "    );\n"
+                    "  };\n"
+                )
+                mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
+                with open(main_p, 'w', encoding='utf-8') as f:
+                    f.write(mtxt)
 
-                    mtxt += "\n" + wrapper
-                    mtxt = mtxt.replace("child: const OpenWaveApp(),", "child: const GlobalAppWrapper(child: OpenWaveApp()),")
-                    
-                    shield = (
-                        "  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
-                        "    return MaterialApp(\n"
-                        "      home: Scaffold(\n"
-                        "        backgroundColor: const Color(0xFFFFFFFF),\n"
-                        "        body: SafeArea(\n"
-                        "          child: SingleChildScrollView(\n"
-                        "            padding: const EdgeInsets.all(16),\n"
-                        "            child: Text(\n"
-                        "              'CRASH:\\n' + details.exceptionAsString() + '\\n\\n' + (details.stack?.toString() ?? ''),\n"
-                        "              style: const TextStyle(color: Color(0xFFFF0000), fontSize: 14, fontWeight: FontWeight.bold),\n"
-                        "            ),\n"
-                        "          ),\n"
-                        "        ),\n"
-                        "      ),\n"
-                        "    );\n"
-                        "  };\n"
-                    )
-                    mtxt = mtxt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();\n" + shield)
-                    
-                    with open(main_p, 'w', encoding='utf-8') as f:
-                        f.write(mtxt)
+        # --- 4. CONNECT PROFILE TAB BUTTONS & RENAME ADMIN ---
+        screen_files = {
+            "RadioScreen": None,
+            "ChatScreen": None,
+            "AnalyticsScreen": None,
+            "AdminScreen": None,
+            "SettingsScreen": None,
+            "DailyRewardScreen": None,
+            "SpinWheelScreen": None,
+            "AchievementsScreen": None
+        }
+        for root, _, files in os.walk('lib'):
+            for f in files:
+                if not f.endswith('.dart'): continue
+                path = os.path.join(root, f).replace('\\', '/')
+                content = open(path, 'r', encoding='utf-8').read()
+                for screen in screen_files.keys():
+                    if f"class {screen} extends" in content:
+                        screen_files[screen] = "package:openwave/" + path.replace("lib/", "")
+
+        for root, _, files in os.walk('lib'):
+            if 'profile_tab.dart' in files:
+                profile_path = os.path.join(root, 'profile_tab.dart')
+                with open(profile_path, 'r', encoding='utf-8') as f:
+                    p_content = f.read()
+                
+                imports = ""
+                for screen, path in screen_files.items():
+                    if path and path not in p_content:
+                        imports += f"import '{path}';\n"
+                
+                p_content = imports + p_content
+                
+                # Make Admin Button Beautiful
+                p_content = p_content.replace("title: 'admin'.tr(),", "title: 'Завантажити трек (Адмін)',")
+                p_content = p_content.replace("icon: Icons.admin_panel_settings,", "icon: Icons.cloud_upload, textColor: Colors.green,")
+                
+                # Connect Routing
+                p_content = p_content.replace("context.push('/radio')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const RadioScreen()))")
+                p_content = p_content.replace("context.push('/chat')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen()))")
+                p_content = p_content.replace("context.push('/analytics')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))")
+                p_content = p_content.replace("context.push('/admin')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))")
+                p_content = p_content.replace("context.push('/settings')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))")
+                p_content = p_content.replace("context.push('/daily-reward')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyRewardScreen()))")
+                p_content = p_content.replace("context.push('/spin-wheel')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const SpinWheelScreen()))")
+                p_content = p_content.replace("context.push('/achievements')", "Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen()))")
+                p_content = p_content.replace("context.push('/edit-profile')", "ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'), backgroundColor: Colors.orange))")
+                
+                with open(profile_path, 'w', encoding='utf-8') as f:
+                    f.write(p_content)
 
         fix_all()
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - Pub Get & Generate Code
+    - name: STEP 7 - Inject Reactive Library Screen
       run: |
         cd ${{ env.FLUTTER_DIR }}
-        flutter pub get
-        dart run build_runner build --delete-conflicting-outputs || true
+        LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
+        cat << 'EOF' > "$LIB_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:easy_localization/easy_localization.dart';
+        import 'package:go_router/go_router.dart';
 
-    - name: STEP 8 - Build RELEASE APK
-      run: |
-        cd ${{ env.FLUTTER_DIR }}
-        flutter build apk --release
+        import 'package:openwave/core/theme/app_theme.dart';
+        import 'package:openwave/core/services/supabase_service.dart';
+        import 'package:openwave/core/models/playlist_model.dart';
 
-    - name: STEP 9 - Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: OpenWave-App-Ready
-        path: "**/build/app/outputs/flutter-apk/*.apk"
+        class LibraryTab extends StatefulWidget {
+          const LibraryTab({super.key});
+          @override
+          State<LibraryTab> createState() => _LibraryTabState();
+        }
+
+        class _LibraryTabState extends State<LibraryTab> {
+          final _supabase = SupabaseService();
+          List<PlaylistModel> _playlists = [];
+          bool _isLoading = true;
+
+          @override
+          void initState() {
+            super.initState();
+            _loadPlaylists();
+          }
+
+          Future<void> _loadPlaylists() async {
+            if (!mounted) return;
+            setState(() => _isLoading = true);
+            try {
+              final playlists = await _supabase.getU
