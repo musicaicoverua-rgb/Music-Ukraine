@@ -44,7 +44,7 @@ jobs:
           intl: ^0.19.0
         EOF
 
-    - name: STEP 3 - Android Config Fix (SDK 35 Enforcement)
+    - name: STEP 3 - Android Config Fix (SDK 35)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p android
@@ -64,7 +64,7 @@ jobs:
           sed -i -E 's/minSdkVersion [0-9]+/minSdkVersion 24/g' android/app/build.gradle || true
         fi
 
-    - name: STEP 4 - Asset Generator & Background Permissions
+    - name: STEP 4 - Asset Generator & Permissions
       run: |
         cd ${{ env.FLUTTER_DIR }}
         mkdir -p assets/images assets/animations assets/icons assets/fonts assets/translations assets/langs
@@ -178,7 +178,6 @@ jobs:
                 with open(main_path, 'w', encoding='utf-8') as f:
                     f.write(txt)
 
-        # Wipe buggy Kotlin code
         for root, _, files in os.walk('android/app/src/main'):
             for f in files:
                 if f in ['MainActivity.kt', 'MainActivity.java']:
@@ -405,31 +404,43 @@ jobs:
                   SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                            Row(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index == 0) {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
-                                IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
-                              ]
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        if (_loading) const Center(child: CircularProgressIndicator())
-                        else if (_playlists.isEmpty) Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть свій перший плейлист!', style: TextStyle(color: AppTheme.primaryColor))))
-                        else ..._playlists.map((p) => ListTile(
-                          leading: const Icon(Icons.playlist_play, color: AppTheme.primaryColor))))
-                        else ..._playlists.map((p) => ListTile(
-                          leading: const Icon(Icons.playlist_play, color: AppTheme.primaryColor),
-                          title: Text(p.name, style: const TextStyle(color: Colors.white)),
-                          subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
-                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
-                        )),
-                      ]),
+                                const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                                Row(
+                                  children: [
+                                    IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
+                                    IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
+                                  ]
+                                )
+                              ],
+                            );
+                          }
+                          
+                          if (_loading) {
+                            if (index == 1) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+                            return const SizedBox.shrink();
+                          }
+                          
+                          if (_playlists.isEmpty) {
+                            if (index == 1) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть свій перший плейлист!', style: TextStyle(color: AppTheme.primaryColor)))));
+                            return const SizedBox.shrink();
+                          }
+                          
+                          final p = _playlists[index - 1];
+                          return ListTile(
+                            leading: const Icon(Icons.playlist_play, color: AppTheme.primaryColor),
+                            title: Text(p.name, style: const TextStyle(color: Colors.white)),
+                            subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
+                            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
+                          );
+                        },
+                        childCount: _loading || _playlists.isEmpty ? 2 : _playlists.length + 1,
+                      ),
                     ),
                   ),
                 ],
@@ -448,7 +459,8 @@ jobs:
                 p = os.path.join(root, 'profile_tab.dart')
                 with open(p, 'r', encoding='utf-8') as f:
                     txt = f.read()
-                txt = txt.replace("title: 'admin'.tr(),", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,")
+                txt = re.sub(r"title:\s*'admin'\.tr\(\),.*?icon:\s*Icons\.admin_panel_settings,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload,", txt, flags=re.DOTALL)
+                txt = re.sub(r"title:\s*'Завантажити трек \(Адмін\)'.*?icon:\s*Icons\.cloud_upload,.*?textColor:\s*Colors\.green,.*?icon:\s*Icons\.cloud_upload,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,", txt, flags=re.DOTALL)
                 txt = txt.replace("title: 'Upload Track (Admin)',", "title: 'Завантажити трек (Адмін)',")
                 txt = re.sub(r"context\.push\('/[^']+'\)", "ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...')))", txt)
                 txt = re.sub(r"SnackBar\(content:\s*Text\('Coming soon\.\.\.'\)\)", "SnackBar(content: Text('В розробці...'))", txt)
