@@ -89,7 +89,7 @@ jobs:
       - name: 6. Inject UI (Screens & Player)
         run: |
           cd "${{ env.FLUTTER_DIR }}"
-          # Щоб уникнути довгих рядків, які ламають GitHub, я підготував чистий Python-скрипт, який згенерує всі файли.
+         
           cat << 'EOF' > make_ui.py
           import os
           
@@ -111,7 +111,7 @@ jobs:
               if (mounted) setState(() => _l = false);
             }
             @override Widget build(BuildContext c) { return Scaffold(backgroundColor: Colors.black, body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.waves, size: 80, color: Color(0xFF6C63FF)), const SizedBox(height: 20), Text(_i ? 'Вхід' : 'Реєстрація', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40), TextField(controller: _e, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Email', filled: true, fillColor: Color(0xFF1E1E2C))), const SizedBox(height: 16), TextField(controller: _p, obscureText: true, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Пароль', filled: true, fillColor: Color(0xFF1E1E2C))), const SizedBox(height: 32), SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)), onPressed: _l ? null : _sub, child: _l ? const CircularProgressIndicator(color: Colors.white) : Text(_i ? 'Увійти' : 'Створити', style: const TextStyle(color: Colors.white)))), TextButton(onPressed: () => setState(() => _i = !_i), child: Text(_i ? 'Немає акаунту?' : 'Вже є акаунт?', style: const TextStyle(color: Colors.grey))) ])))); }
-          }""")
+          } )
           
           # Audio Service
           write_f('lib/core/services/simple_audio_service.dart', """import 'package:flutter/foundation.dart'; import 'package:just_audio/just_audio.dart'; import 'package:just_audio_background/just_audio_background.dart'; import 'package:openwave/core/models/track_model.dart'; import 'package:supabase_flutter/supabase_flutter.dart';
