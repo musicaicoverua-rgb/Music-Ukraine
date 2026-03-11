@@ -147,6 +147,16 @@ jobs:
                 txt = re.sub(r'delete\(([a-zA-Z0-9_]+)\)\.delete\((.*?)\);', drift_rep, txt, flags=re.DOTALL)
                 txt = re.sub(r'native:\s*(?:const\s+)?DriftNativeOptions\s*\((?:[^)(]+|\([^)(]*\))*\)\s*,?', '', txt, flags=re.DOTALL)
                 
+                # Відновлено ліки від старих помилок Kimi (dropdown, easy_localization, supabase)
+                txt = txt.replace("enabled: !_isUploading,", "// enabled: !_isUploading,")
+                txt = txt.replace("args: {'coins':", "namedArgs: {'coins':")
+                txt = txt.replace("args: {'cost':", "namedArgs: {'cost':")
+                txt = txt.replace("currentTrack: () => event.track", "currentTrack: event.track")
+                txt = txt.replace("currentTrack: () => null", "currentTrack: null")
+                txt = txt.replace("query = query.eq('genre', genre);", "// eq")
+                txt = txt.replace("query = query.or('title.ilike.%$searchQuery%,artist.ilike.%$searchQuery%');", "// or")
+                txt = txt.replace(".or('and(sender_id.eq.${currentUser?.id},receiver_id.eq.$otherUserId),and(sender_id.eq.$otherUserId,receiver_id.eq.${currentUser?.id})')", "")
+                
                 if orig != txt:
                     with open(p, 'w', encoding='utf-8') as file:
                         file.write(txt)
