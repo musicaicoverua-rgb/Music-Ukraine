@@ -162,7 +162,6 @@ jobs:
                 if orig != txt:
                     with open(p, 'w', encoding='utf-8') as file: file.write(txt)
 
-        # VERY SAFE MAIN.DART INIT (Prevents White Screen)
         main_path = next((os.path.join(r, f) for r, _, fs in os.walk('lib') for f in fs if f == 'main.dart'), None)
         if main_path:
             with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
@@ -176,12 +175,11 @@ jobs:
                     "      androidNotificationOngoing: true,\n"
                     "    );\n"
                     "  } catch (e) {\n"
-                    "    debugPrint('Audio background init error: $e');\n"
+                    "    debugPrint('Audio init error: $e');\n"
                     "  }\n"
                 )
                 txt = txt.replace("WidgetsFlutterBinding.ensureInitialized();", "WidgetsFlutterBinding.ensureInitialized();" + safe_init)
             
-            # Global error catcher to avoid white screen of death
             if 'ErrorWidget.builder' not in txt:
                 error_catcher = (
                     "\n  ErrorWidget.builder = (FlutterErrorDetails details) {\n"
@@ -191,7 +189,7 @@ jobs:
                     "        body: Center(\n"
                     "          child: SingleChildScrollView(\n"
                     "            padding: const EdgeInsets.all(20),\n"
-                    "            child: Text('CRASH:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),\n"
+                    "            child: Text('ПОМИЛКА:\\n${details.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),\n"
                     "          ),\n"
                     "        ),\n"
                     "      ),\n"
@@ -218,10 +216,11 @@ jobs:
         EOF
         python3 fix_app.py
 
-    - name: STEP 7 - App UI (Ukrainian) & Player Engine
+    - name: STEP 7 - UI Rewrite (Bypass AuthBloc Crash)
       run: |
         cd ${{ env.FLUTTER_DIR }}
         
+        # Audio Service
         mkdir -p lib/core/services
         cat << 'INNEREOF' > lib/core/services/simple_audio_service.dart
         import 'package:flutter/foundation.dart';
@@ -233,7 +232,6 @@ jobs:
           static final SimpleAudioService _instance = SimpleAudioService._internal();
           factory SimpleAudioService() => _instance;
           SimpleAudioService._internal();
-
           final AudioPlayer player = AudioPlayer();
           final ValueNotifier<TrackModel?> currentTrack = ValueNotifier(null);
 
@@ -244,96 +242,67 @@ jobs:
               try { url = (track as dynamic).audioUrl ?? ''; } catch (e) {}
               if (url.isEmpty) { try { url = (track as dynamic).fileUrl ?? ''; } catch (e) {} }
               if (url.isEmpty) { try { url = (track as dynamic).filePath ?? ''; } catch (e) {} }
-              
               if (url.isNotEmpty) {
                 final audioSource = AudioSource.uri(
                   Uri.parse(url),
-                  tag: MediaItem(
-                    id: track.id,
-                    album: 'OpenWave',
-                    title: track.title,
-                    artist: track.artist,
-                    artUri: Uri.parse('https://ui-avatars.com/api/?name=${track.title}&background=random'),
-                  ),
+                  tag: MediaItem(id: track.id, album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse('https://ui-avatars.com/api/?name=${track.title}&background=random')),
                 );
                 await player.setAudioSource(audioSource);
                 player.play();
               }
-            } catch (e) {
-              debugPrint("Playback error: $e");
-            }
+            } catch (e) { debugPrint("Playback error: $e"); }
           }
-
-          void togglePlayPause() {
-            if (player.playing) player.pause();
-            else player.play();
-          }
+          void togglePlayPause() { if (player.playing) player.pause(); else player.play(); }
         }
         INNEREOF
 
+        # Rewrite Home Tab
         HOME_FILE=$(find lib -name "home_tab.dart" -type f | head -n 1)
-        if [ ! -z "$HOME_FILE" ]; then
         cat << 'INNEREOF' > "$HOME_FILE"
         import 'package:flutter/material.dart';
-        import 'package:openwave/core/theme/app_theme.dart';
         import 'package:openwave/core/services/supabase_service.dart';
         import 'package:openwave/core/models/track_model.dart';
         import 'package:openwave/core/services/simple_audio_service.dart';
 
-        class HomeTab extends StatefulWidget {
-          const HomeTab({super.key});
-          @override
-          State<HomeTab> createState() => _HomeTabState();
-        }
-
+        class HomeTab extends StatefulWidget { const HomeTab({super.key}); @override State<HomeTab> createState() => _HomeTabState(); }
         class _HomeTabState extends State<HomeTab> {
           final _supabase = SupabaseService();
           List<TrackModel> _tracks = [];
           bool _loading = true;
-
-          @override
-          void initState() { super.initState(); _safeLoad(); }
-
+          @override void initState() { super.initState(); _safeLoad(); }
           Future<void> _safeLoad() async {
             if (!mounted) return;
             setState(() => _loading = true);
             try {
               final tracks = await _supabase.getTracks();
               if (mounted) setState(() { _tracks = tracks; _loading = false; });
-            } catch (e) {
-              if (mounted) setState(() => _loading = false);
-            }
+            } catch (e) { if (mounted) setState(() => _loading = false); }
           }
-
-          @override
-          Widget build(BuildContext context) {
+          @override Widget build(BuildContext context) {
             return RefreshIndicator(
               onRefresh: _safeLoad,
               child: CustomScrollView(
                 slivers: [
-                  const SliverAppBar(floating: true, title: Text('OpenWave', style: TextStyle(fontWeight: FontWeight.bold))),
-                  if (_loading) const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+                  const SliverAppBar(floating: true, backgroundColor: Colors.black, title: Text('OpenWave', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
+                  if (_loading) const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))))
                   else if (_tracks.isEmpty) const SliverFillRemaining(child: Center(child: Text('Пісень ще немає. Завантажте першу!', style: TextStyle(color: Colors.white))))
                   else SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final track = _tracks[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
-                            child: ListTile(
-                              leading: const Icon(Icons.music_note, color: AppTheme.primaryColor),
-                              title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                              subtitle: Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                              trailing: const Icon(Icons.play_circle_fill, color: AppTheme.primaryColor, size: 32),
-                              onTap: () => SimpleAudioService().playTrack(track),
-                            ),
-                          );
-                        },
-                        childCount: _tracks.length,
-                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final track = _tracks[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: const Icon(Icons.music_note, color: Color(0xFF6C63FF)),
+                            title: Text(track.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            subtitle: Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                            trailing: const Icon(Icons.play_circle_fill, color: Color(0xFF6C63FF), size: 32),
+                            onTap: () => SimpleAudioService().playTrack(track),
+                          ),
+                        );
+                      }, childCount: _tracks.length),
                     ),
                   ),
                 ],
@@ -342,101 +311,75 @@ jobs:
           }
         }
         INNEREOF
-        fi
-        
+
+        # Rewrite Library Tab
         LIB_FILE=$(find lib -name "library_tab.dart" -type f | head -n 1)
-        if [ ! -z "$LIB_FILE" ]; then
         cat << 'INNEREOF' > "$LIB_FILE"
         import 'package:flutter/material.dart';
-        import 'package:openwave/core/theme/app_theme.dart';
         import 'package:openwave/core/services/supabase_service.dart';
         import 'package:openwave/core/models/playlist_model.dart';
 
-        class LibraryTab extends StatefulWidget {
-          const LibraryTab({super.key});
-          @override
-          State<LibraryTab> createState() => _LibraryTabState();
-        }
-
+        class LibraryTab extends StatefulWidget { const LibraryTab({super.key}); @override State<LibraryTab> createState() => _LibraryTabState(); }
         class _LibraryTabState extends State<LibraryTab> {
           final _supabase = SupabaseService();
           List<PlaylistModel> _playlists = [];
           bool _loading = true;
-
-          @override
-          void initState() { super.initState(); _loadPlaylists(); }
-
+          @override void initState() { super.initState(); _loadPlaylists(); }
           Future<void> _loadPlaylists() async {
             if (!mounted) return;
             setState(() => _loading = true);
             try {
               final pl = await _supabase.getUserPlaylists();
               if (mounted) setState(() { _playlists = pl; _loading = false; });
-            } catch (e) {
-              if (mounted) setState(() => _loading = false);
-            }
+            } catch (e) { if (mounted) setState(() => _loading = false); }
           }
-
           void _showCreateDialog() {
             final ctrl = TextEditingController();
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: const Color(0xFF1E1E2C),
-                title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),
-                content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey))),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (ctrl.text.isNotEmpty) {
-                        await _supabase.createPlaylist(name: ctrl.text);
-                        if (mounted) { Navigator.pop(ctx); _loadPlaylists(); }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-                    child: const Text('Створити'),
-                  ),
-                ],
-              ),
-            );
+            showDialog(context: context, builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF1E1E2C),
+              title: const Text('Створити плейлист', style: TextStyle(color: Colors.white)),
+              content: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Назва плейлиста', hintStyle: TextStyle(color: Colors.grey))),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Відміна', style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  onPressed: () async { if (ctrl.text.isNotEmpty) { await _supabase.createPlaylist(name: ctrl.text); if (mounted) { Navigator.pop(ctx); _loadPlaylists(); } } },
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                  child: const Text('Створити'),
+                ),
+              ],
+            ));
           }
-
-          @override
-          Widget build(BuildContext context) {
+          @override Widget build(BuildContext context) {
             return RefreshIndicator(
               onRefresh: _loadPlaylists,
               child: CustomScrollView(
                 slivers: [
-                  const SliverAppBar(floating: true, title: Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold))),
+                  const SliverAppBar(floating: true, backgroundColor: Colors.black, title: Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
                   SliverPadding(
                     padding: const EdgeInsets.all(16),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index == 0) return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                              Row(children: [
-                                IconButton(icon: const Icon(Icons.refresh, color: AppTheme.primaryColor), onPressed: _loadPlaylists),
-                                IconButton(icon: const Icon(Icons.add, color: AppTheme.primaryColor), onPressed: _showCreateDialog),
-                              ])
-                            ],
-                          );
-                          if (_loading) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
-                          if (_playlists.isEmpty) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть свій перший плейлист!', style: TextStyle(color: AppTheme.primaryColor)))));
-                          
-                          final p = _playlists[index - 1];
-                          return ListTile(
-                            leading: const Icon(Icons.playlist_play, color: AppTheme.primaryColor),
-                            title: Text(p.name, style: const TextStyle(color: Colors.white)),
-                            subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
-                            onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
-                          );
-                        },
-                        childCount: _loading || _playlists.isEmpty ? 2 : _playlists.length + 1,
-                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        if (index == 0) return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Плейлисти', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Row(children: [
+                              IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF6C63FF)), onPressed: _loadPlaylists),
+                              IconButton(icon: const Icon(Icons.add, color: Color(0xFF6C63FF)), onPressed: _showCreateDialog),
+                            ])
+                          ],
+                        );
+                        if (_loading) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))));
+                        if (_playlists.isEmpty) return Padding(padding: EdgeInsets.all(20), child: Center(child: TextButton(onPressed: _showCreateDialog, child: const Text('Створіть перший плейлист!', style: TextStyle(color: Color(0xFF6C63FF))))));
+                        
+final p = _playlists[index - 1];
+                        return ListTile(
+                          leading: const Icon(Icons.playlist_play, color: Color(0xFF6C63FF)),
+                          title: Text(p.name, style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('${p.tracks.length} треків', style: const TextStyle(color: Colors.grey)),
+                          onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Відкриття плейлиста в розробці...'))),
+                        );
+                      }, childCount: _loading || _playlists.isEmpty ? 2 : _playlists.length + 1),
                     ),
                   ),
                 ],
@@ -445,46 +388,152 @@ jobs:
           }
         }
         INNEREOF
-        fi
 
-        cat << 'EOF' > fix_main_screen.py
-        import os, re
-        
-        for root, _, files in os.walk('lib'):
-            if 'profile_tab.dart' in files:
-                p = os.path.join(root, 'profile_tab.dart')
-                with open(p, 'r', encoding='utf-8') as f: txt = f.read()
-                txt = re.sub(r"title:\s*'admin'\.tr\(\),.*?icon:\s*Icons\.admin_panel_settings,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload,", txt, flags=re.DOTALL)
-                txt = re.sub(r"title:\s*'Завантажити трек \(Адмін\)'.*?icon:\s*Icons\.cloud_upload,.*?textColor:\s*Colors\.green,.*?icon:\s*Icons\.cloud_upload,", "title: 'Завантажити трек (Адмін)', icon: Icons.cloud_upload, textColor: Colors.green,", txt, flags=re.DOTALL)
-                txt = re.sub(r"context\.push\('/[^']+'\)", "ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...')))", txt)
-                with open(p, 'w', encoding='utf-8') as f: f.write(txt)
-        
-        main_path = None
-        for root, _, files in os.walk('lib'):
-            if 'main_screen.dart' in files: main_path = os.path.join(root, 'main_screen.dart')
-        
-        if main_path:
-            with open(main_path, 'r', encoding='utf-8') as f: txt = f.read()
-            
-            imports = "import 'package:openwave/core/services/simple_audio_service.dart';\nimport 'package:openwave/core/models/track_model.dart';\nimport 'package:openwave/core/services/supabase_service.dart';\nimport 'package:openwave/features/admin/presentation/screens/admin_screen.dart';\n"
-            if "simple_audio_service" not in txt: txt = imports + txt
-                
-            if "floatingActionButton:" not in txt:
-                fab = "      floatingActionButton: _currentIndex == 0 ? FutureBuilder<bool>(\n        future: SupabaseService().isAdmin(),\n        builder: (context, snapshot) {\n          if (snapshot.data == true) {\n            return FloatingActionButton.extended(\n              backgroundColor: Colors.green,\n              icon: const Icon(Icons.cloud_upload, color: Colors.white),\n              label: const Text('Завантажити трек', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),\n              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),\n            );\n          }\n          return const SizedBox.shrink();\n        },\n      ) : null,\n      bottomNavigationBar:"
-                txt = txt.replace("bottomNavigationBar:", fab)
-            
-            if "body: Stack(" not in txt:
-                body_match = re.search(r'body:\s*(.*?)(?=\n\s*bottomNavigationBar:|\n\s*floatingActionButton:)', txt, re.DOTALL)
-                if body_match:
-                    original_body = body_match.group(1).strip()
-                    if original_body.endswith(','): original_body = original_body[:-1]
-                    new_body_template = "body: Stack(\n        children: [\n          Positioned.fill(child: {{BODY}}),\n          Positioned(\n            bottom: 0, left: 0, right: 0,\n            child: ValueListenableBuilder<TrackModel?>(\n              valueListenable: SimpleAudioService().currentTrack,\n              builder: (context, track, child) {\n                if (track == null) return const SizedBox.shrink();\n                return Container(\n                  height: 65,\n                  decoration: BoxDecoration(color: const Color(0xFF2C2C3E), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),\n                  padding: const EdgeInsets.symmetric(horizontal: 16),\n                  child: Row(\n                    children: [\n                      const Icon(Icons.music_note, color: Colors.white),\n                      const SizedBox(width: 12),\n                      Expanded(\n                        child: Column(\n                          crossAxisAlignment: CrossAxisAlignment.start,\n                          mainAxisAlignment: MainAxisAlignment.center,\n                          children: [\n                            Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),\n                            Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),\n                          ],\n                        ),\n                      ),\n                      StreamBuilder<bool>(\n                        stream: SimpleAudioService().player.playingStream,\n                        builder: (context, snapshot) {\n                          final isPlaying = snapshot.data ?? false;\n                          return IconButton(\n                            icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36),\n                            onPressed: () => SimpleAudioService().togglePlayPause(),\n                          );\n                        },\n                      ),\n                    ],\n                  ),\n                );\n              },\n            ),\n          ),\n        ],\n      ),"
-                    new_body = new_body_template.replace('{{BODY}}', original_body)
-                    txt = txt[:body_match.start()] + new_body + "\n      " + txt[body_match.end():]
-            
-            with open(main_path, 'w', encoding='utf-8') as f: f.write(txt)
-        EOF
-        python3 fix_main_screen.py
+        # Rewrite Profile Tab (Kills AuthBloc completely)
+        PROF_FILE=$(find lib -name "profile_tab.dart" -type f | head -n 1)
+        cat << 'INNEREOF' > "$PROF_FILE"
+        import 'package:flutter/material.dart';
+        // REPLACE_ADMIN_IMPORT
+
+        class ProfileTab extends StatelessWidget {
+          const ProfileTab({super.key});
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(title: const Text('Профіль', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), backgroundColor: Colors.black),
+              body: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Center(child: CircleAvatar(radius: 50, backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.person, size: 50, color: Colors.white))),
+                  const SizedBox(height: 20),
+                  const Center(child: Text('Користувач', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white))),
+                  const SizedBox(height: 40),
+                  _buildItem(context, Icons.card_giftcard, 'Щоденна нагорода', Colors.orange),
+                  _buildItem(context, Icons.casino, 'Колесо Фортуни', Colors.pink),
+                  _buildItem(context, Icons.emoji_events, 'Досягнення', Colors.purple),
+                  _buildItem(context, Icons.radio, 'OpenWave Радіо', Colors.blue),
+                  const Divider(color: Colors.grey, height: 40),
+                  ListTile(
+                    leading: const Icon(Icons.cloud_upload, color: Colors.green),
+                    title: const Text('Завантажити трек (Адмін)', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+                  ),
+                ],
+              ),
+            );
+          }
+          Widget _buildItem(BuildContext context, IconData icon, String title, Color color) {
+            return Card(
+              color: const Color(0xFF1E1E2C),
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: Icon(icon, color: color),
+                title: Text(title, style: const TextStyle(color: Colors.white)),
+                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В розробці...'))),
+              ),
+            );
+          }
+        }
+        INNEREOF
+
+        # Rewrite Main Screen (Kills AuthBloc completely)
+        MAIN_FILE=$(find lib -name "main_screen.dart" -type f | head -n 1)
+        cat << 'INNEREOF' > "$MAIN_FILE"
+        import 'package:flutter/material.dart';
+        import 'package:openwave/core/services/simple_audio_service.dart';
+        import 'package:openwave/core/models/track_model.dart';
+        // REPLACE_HOME_IMPORT
+        // REPLACE_LIB_IMPORT
+        // REPLACE_PROF_IMPORT
+
+        class MainScreen extends StatefulWidget {
+          const MainScreen({super.key});
+          @override State<MainScreen> createState() => _MainScreenState();
+        }
+
+        class _MainScreenState extends State<MainScreen> {
+          int _currentIndex = 0;
+          final List<Widget> _pages = [const HomeTab(), const LibraryTab(), const ProfileTab()];
+
+          @override
+          Widget build(BuildContext context) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              body: Stack(
+                children: [
+                  Positioned.fill(child: IndexedStack(index: _currentIndex, children: _pages)),
+                  Positioned(
+                    bottom: 0, left: 0, right: 0,
+                    child: ValueListenableBuilder<TrackModel?>(
+                      valueListenable: SimpleAudioService().currentTrack,
+                      builder: (context, track, child) {
+                        if (track == null) return const SizedBox.shrink();
+                        return Container(
+                          height: 65,
+                          decoration: BoxDecoration(color: const Color(0xFF2C2C3E), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.music_note, color: Colors.white),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    Text(track.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                              StreamBuilder<bool>(
+                                stream: SimpleAudioService().player.playingStream,
+                                builder: (context, snapshot) {
+                                  final isPlaying = snapshot.data ?? false;
+                                  return IconButton(
+                                    icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36),
+                                    onPressed: () => SimpleAudioService().togglePlayPause(),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              bottomNavigationBar: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (i) => setState(() => _currentIndex = i),
+                backgroundColor: const Color(0xFF1E1E2C),
+                selectedItemColor: const Color(0xFF6C63FF),
+                unselectedItemColor: Colors.grey,
+                items: const [
+                  BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Головна'),
+                  BottomNavigationBarItem(icon: Icon(Icons.library_music), label: 'Бібліотека'),
+                  BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Профіль'),
+                ],
+              ),
+            );
+          }
+        }
+        INNEREOF
+
+        # Inject real paths
+        HOME_PATH=$(echo "$HOME_FILE" | sed 's/lib\///')
+        LIB_PATH=$(echo "$LIB_FILE" | sed 's/lib\///')
+        PROF_PATH=$(echo "$PROF_FILE" | sed 's/lib\///')
+        ADMIN_FILE=$(find lib -name "admin_screen.dart" -type f | head -n 1)
+        ADMIN_PATH=$(echo "$ADMIN_FILE" | sed 's/lib\///')
+
+        sed -i "s|// REPLACE_HOME_IMPORT|import 'package:openwave/$HOME_PATH';|g" "$MAIN_FILE"
+        sed -i "s|// REPLACE_LIB_IMPORT|import 'package:openwave/$LIB_PATH';|g" "$MAIN_FILE"
+        sed -i "s|// REPLACE_PROF_IMPORT|import 'package:openwave/$PROF_PATH';|g" "$MAIN_FILE"
+        sed -i "s|// REPLACE_ADMIN_IMPORT|import 'package:openwave/$ADMIN_PATH';|g" "$PROF_FILE"
 
     - name: STEP 8 - Build Ready APK
       run: |
