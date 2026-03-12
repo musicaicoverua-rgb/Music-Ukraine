@@ -68,7 +68,6 @@ jobs:
             cp assets/images/logo.png "assets/icons/$icon"
           done
           
-          # СТВОРЮЄМО 8 МОВ
           echo '{"home": "Головна", "library": "Бібліотека", "profile": "Профіль", "radio": "Радіо", "chat": "Підтримка"}' > assets/translations/uk.json
           echo '{"home": "Home", "library": "Library", "profile": "Profile", "radio": "Radio", "chat": "Support"}' > assets/translations/en.json
           echo '{"home": "Główna", "library": "Biblioteka", "profile": "Profil", "radio": "Radio", "chat": "Wsparcie"}' > assets/translations/pl.json
@@ -175,36 +174,76 @@ jobs:
           
           cat << 'EOF' > lib/core/models/track_model.dart
           class TrackModel {
-            final String id, title, artist; final String? audioUrl, fileUrl, filePath;
-            TrackModel({required this.id, required this.title, required this.artist, this.audioUrl, this.fileUrl, this.filePath});
+            final String id, title, artist; final String? audioUrl, coverUrl;
+            TrackModel({required this.id, required this.title, required this.artist, this.audioUrl, this.coverUrl});
             factory TrackModel.fromJson(Map<String, dynamic> json) {
               return TrackModel(
                 id: json['id']?.toString() ?? '', 
-                title: json['title']?.toString() ?? 'Unknown', 
-                artist: json['artist']?.toString() ?? 'Unknown', 
-                audioUrl: json['audioUrl']?.toString() ?? json['audio_url']?.toString(), 
-                fileUrl: json['fileUrl']?.toString() ?? json['file_url']?.toString(), 
-                filePath: json['filePath']?.toString() ?? json['file_path']?.toString()
+                title: json['title']?.toString() ?? 'Невідомий трек', 
+                artist: json['artist']?.toString() ?? 'Невідомий артист', 
+                audioUrl: json['audio_url']?.toString() ?? json['audioUrl']?.toString() ?? json['url']?.toString(), 
+                coverUrl: json['cover_url']?.toString() ?? json['coverUrl']?.toString() ?? json['image_url']?.toString()
               );
             }
           }
           EOF
 
-          cat << 'EOF' > lib/core/models/playlist_model.dart
-          import 'track_model.dart';
-          class PlaylistModel { final String id, name; final List<TrackModel> tracks; PlaylistModel({required this.id, required this.name, required this.tracks}); }
-          EOF
-
           cat << 'EOF' > lib/core/services/supabase_service.dart
+          import 'dart:io';
+          import 'package:flutter/foundation.dart';
           import 'package:supabase_flutter/supabase_flutter.dart';
           import '../models/track_model.dart';
-          import '../models/playlist_model.dart';
           class SupabaseService {
             final _c = Supabase.instance.client;
-            Future<List<TrackModel>> getTracks() async { try { final d = await _c.from('tracks').select(); return (d as List).map((e) => TrackModel.fromJson(e as Map<String, dynamic>)).toList(); } catch(e) { return []; } }
-            Future<List<PlaylistModel>> getUserPlaylists() async { return []; }
-            Future<void> createPlaylist({required String name}) async {}
-            Future<bool> isAdmin() async { try { final u = _c.auth.currentUser; if (u == null) return false; final res = await _c.from('profiles').select('is_admin').eq('id', u.id).maybeSingle(); return res != null && res['is_admin'] == true; } catch(e) { return false; } }
+            
+            Future<List<TrackModel>> getTracks() async { 
+              try { 
+                final response = await _c.from('tracks').select().order('created_at', ascending: false);
+                debugPrint('Успішно отримано треків: \${response.length}');
+                return (response as List).map((e) => TrackModel.fromJson(e as Map<String, dynamic>)).toList(); 
+              } catch(e) { 
+                debugPrint('ПОМИЛКА БАЗИ ДАНИХ (RLS або відсутня таблиця): \$e');
+                return []; 
+              } 
+            }
+            
+            Future<bool> isAdmin() async { 
+              try { 
+                final u = _c.auth.currentUser; if (u == null) return false; 
+                final res = await _c.from('profiles').select('is_admin').eq('id', u.id).maybeSingle(); 
+                return res != null && res['is_admin'] == true; 
+              } catch(e) { return false; } 
+            }
+
+            Future<bool> uploadNewTrack(String title, String artist, String audioPath, String? imagePath) async {
+              try {
+                final audioFile = File(audioPath);
+                final audioExt = audioPath.split('.').last;
+                final audioName = 'track_\${DateTime.now().millisecondsSinceEpoch}.$audioExt';
+                await _c.storage.from('tracks').upload(audioName, audioFile);
+                final audioUrl = _c.storage.from('tracks').getPublicUrl(audioName);
+
+                String? imageUrl;
+                if (imagePath != null) {
+                  final imgFile = File(imagePath);
+                  final imgExt = imagePath.split('.').last;
+                  final imgName = 'cover_\${DateTime.now().millisecondsSinceEpoch}.$imgExt';
+                  await _c.storage.from('covers').upload(imgName, imgFile);
+                  imageUrl = _c.storage.from('covers').getPublicUrl(imgName);
+                }
+
+                await _c.from('tracks').insert({
+                  'title': title,
+                  'artist': artist,
+                  'audio_url': audioUrl,
+                  'cover_url': imageUrl
+                });
+                return true;
+              } catch(e) {
+                debugPrint('Upload Error: \$e');
+                return false;
+              }
+            }
           }
           EOF
 
@@ -220,20 +259,28 @@ jobs:
             SimpleAudioService._internal();
             final AudioPlayer player = AudioPlayer();
             final ValueNotifier<TrackModel?> currentTrack = ValueNotifier(null);
+            
             Future<void> playTrack(TrackModel track) async {
               currentTrack.value = track;
               try {
-                String url = track.audioUrl ?? track.fileUrl ?? track.filePath ?? '';
+                String url = track.audioUrl ?? '';
                 if (url.isNotEmpty) {
                   if (!url.startsWith('http')) {
                     url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
                   }
-                  url = url.replaceAll(' ', '%20');
                   
-                  await player.setAudioSource(AudioSource.uri(Uri.parse(url), tag: MediaItem(id: track.id, album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse('https://ui-avatars.com/api/?name=${track.title}&background=random'))));
+                  // ІДЕАЛЬНЕ ОЧИЩЕННЯ ПОСИЛАНЬ ДЛЯ ПЛЕЄРА
+                  url = url.trim().replaceAll(' ', '%20');
+                  debugPrint('Відтворюється URL: \$url');
+                  
+                  String art = track.coverUrl ?? 'https://ui-avatars.com/api/?name=\${track.title}&background=random';
+                  
+                  await player.setAudioSource(AudioSource.uri(Uri.parse(url), tag: MediaItem(id: track.id.toString(), album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse(art))));
                   player.play();
+                } else {
+                  debugPrint('ПОМИЛКА: audioUrl порожній');
                 }
-              } catch (e) { debugPrint(e.toString()); }
+              } catch (e) { debugPrint('ПОМИЛКА ПЛЕЄРА: \$e'); }
             }
             void togglePlayPause() { player.playing ? player.pause() : player.play(); }
           }
@@ -255,18 +302,18 @@ jobs:
               setState(() => isLoading = true);
               try {
                 if (isLogin) { await Supabase.instance.client.auth.signInWithPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); } 
-                else { await Supabase.instance.client.auth.signUp(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Success!'))); setState(() => isLogin = true); }
-              } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth Error. Check details.'), backgroundColor: Colors.red)); }
+                else { await Supabase.instance.client.auth.signUp(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Успіх!'))); setState(() => isLogin = true); }
+              } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка авторизації.'), backgroundColor: Colors.red)); }
               if (mounted) setState(() => isLoading = false);
             }
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(children: [
-                const Icon(Icons.waves, size: 80, color: Color(0xFF6C63FF)), const SizedBox(height: 20),
-                Text(isLogin ? 'Login to OpenWave' : 'Create Account', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
+                const Icon(Icons.waves, size: 80, color: Color(0xFF1DB954)), const SizedBox(height: 20),
+                Text(isLogin ? 'Вхід у OpenWave' : 'Створення акаунту', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
                 TextField(controller: emailCtrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Email', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF1E1E2C), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))), const SizedBox(height: 16),
-                TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Password', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF1E1E2C), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))), const SizedBox(height: 32),
-                SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isLoading ? null : submit, child: isLoading ? const CircularProgressIndicator(color: Colors.white) : Text(isLogin ? 'LOGIN' : 'REGISTER', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)))), const SizedBox(height: 16),
-                TextButton(onPressed: () => setState(() => isLogin = !isLogin), child: Text(isLogin ? 'Need an account? Create one' : 'Already have an account? Login', style: const TextStyle(color: Colors.grey)))
+                TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Пароль', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF1E1E2C), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))), const SizedBox(height: 32),
+                SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: isLoading ? null : submit, child: isLoading ? const CircularProgressIndicator(color: Colors.black) : Text(isLogin ? 'УВІЙТИ' : 'ЗАРЕЄСТРУВАТИСЯ', style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)))), const SizedBox(height: 16),
+                TextButton(onPressed: () => setState(() => isLogin = !isLogin), child: Text(isLogin ? 'Немає акаунту? Створити новий' : 'Вже є акаунт? Увійти', style: const TextStyle(color: Colors.grey)))
               ]))));
             }
           }
@@ -275,64 +322,71 @@ jobs:
           cat << 'EOF' > lib/features/admin/presentation/screens/admin_screen.dart
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
+          import 'package:openwave/core/services/supabase_service.dart';
           class AdminScreen extends StatefulWidget { const AdminScreen({super.key}); @override State<AdminScreen> createState() => _AdminState(); }
           class _AdminState extends State<AdminScreen> {
-            bool isLoading = false; final titleCtrl = TextEditingController(); final artistCtrl = TextEditingController(); String? fileName;
-            void pickFile() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio); if (result != null) { setState(() { fileName = result.files.single.name; }); } }
+            bool isLoading = false; final titleCtrl = TextEditingController(); final artistCtrl = TextEditingController(); 
+            String? audioPath; String? audioName;
+            String? imagePath; String? imageName;
+            
+            void pickAudio() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio); if (result != null) { setState(() { audioPath = result.files.single.path; audioName = result.files.single.name; }); } }
+            void pickImage() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image); if (result != null) { setState(() { imagePath = result.files.single.path; imageName = result.files.single.name; }); } }
+            
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Upload Track', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-                  TextField(controller: titleCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Track Title', labelStyle: TextStyle(color: Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF6C63FF))))), const SizedBox(height: 20),
-                  TextField(controller: artistCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Artist', labelStyle: TextStyle(color: Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF6C63FF))))), const SizedBox(height: 30),
-                  OutlinedButton.icon(onPressed: pickFile, icon: const Icon(Icons.attach_file, color: Colors.white), label: Text(fileName ?? 'Select Audio File', style: const TextStyle(color: Colors.white))), const Spacer(),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: isLoading ? null : () async {
-                    if(titleCtrl.text.isEmpty || artistCtrl.text.isEmpty || fileName == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select a file!'), backgroundColor: Colors.red)); return; }
-                    setState(()=>isLoading=true); await Future.delayed(const Duration(seconds: 2)); setState(()=>isLoading=false); if(!mounted)return;
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Track uploaded successfully!'), backgroundColor: Colors.green)); Navigator.pop(context);
-                  }, child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('UPLOAD TO DB', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))))
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Завантажити Трек', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
+                body: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  TextField(controller: titleCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Назва пісні', labelStyle: TextStyle(color: Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF1DB954))))), const SizedBox(height: 20),
+                  TextField(controller: artistCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Виконавець', labelStyle: TextStyle(color: Colors.grey), enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)), focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF1DB954))))), const SizedBox(height: 30),
+                  OutlinedButton.icon(onPressed: pickAudio, icon: const Icon(Icons.audiotrack, color: Colors.white), label: Text(audioName ?? '1. ОБРАТИ АУДІО (Обов\'язково)', style: const TextStyle(color: Colors.white))), const SizedBox(height: 10),
+                  OutlinedButton.icon(onPressed: pickImage, icon: const Icon(Icons.image, color: Colors.white), label: Text(imageName ?? '2. ОБРАТИ ФОТО (Обкладинка)', style: const TextStyle(color: Colors.white))), const Spacer(),
+                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: isLoading ? null : () async {
+                    if(titleCtrl.text.isEmpty || artistCtrl.text.isEmpty || audioPath == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Заповніть назву, артиста та оберіть аудіо!'), backgroundColor: Colors.red)); return; }
+                    setState(()=>isLoading=true); 
+                    bool success = await SupabaseService().uploadNewTrack(titleCtrl.text, artistCtrl.text, audioPath!, imagePath);
+                    setState(()=>isLoading=false); 
+                    if(!mounted)return;
+                    if(success) {
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
+                    } else {
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка. Перевірте публічність бакетів у Supabase.'), backgroundColor: Colors.red));
+                    }
+                  }, child: isLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('ЗАВАНТАЖИТИ В БАЗУ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))))
                 ])));
             }
           }
           EOF
 
           cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
-          import 'package:flutter/material.dart';
-          import 'dart:math';
+          import 'package:flutter/material.dart'; import 'dart:math';
           class DailyRewardScreen extends StatefulWidget { const DailyRewardScreen({super.key}); @override State<DailyRewardScreen> createState() => _RewardState(); }
           class _RewardState extends State<DailyRewardScreen> {
             bool claimed = false; int reward = 0;
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Daily Reward', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.card_giftcard, size: 140, color: claimed ? Colors.grey : Colors.orange), const SizedBox(height: 30),
-                  Text(claimed ? 'You received $reward coins!' : 'Your gift is ready!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
-                  SizedBox(width: 200, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: claimed ? Colors.grey : Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))), onPressed: claimed ? null : () => setState(() { reward = Random().nextInt(50) + 10; claimed = true; }), child: Text(claimed ? 'Come back tomorrow' : 'OPEN', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))))
-                ])));
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Щоденна нагорода', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
+                body: RefreshIndicator(onRefresh: () async { await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.2), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.card_giftcard, size: 140, color: claimed ? Colors.grey : const Color(0xFF1DB954)), const SizedBox(height: 30),
+                  Text(claimed ? 'Ви отримали \$reward монет!' : 'Ваш подарунок готовий!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
+                  SizedBox(width: 200, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: claimed ? Colors.grey : const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: claimed ? null : () => setState(() { reward = Random().nextInt(50) + 10; claimed = true; }), child: Text(claimed ? 'Приходьте завтра' : 'ВІДКРИТИ', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18))))
+                ]))])));
             }
           }
           EOF
 
           cat << 'EOF' > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
-          import 'package:flutter/material.dart';
-          import 'dart:math';
+          import 'package:flutter/material.dart'; import 'dart:math';
           class SpinWheelScreen extends StatefulWidget { const SpinWheelScreen({super.key}); @override State<SpinWheelScreen> createState() => _SpinState(); }
           class _SpinState extends State<SpinWheelScreen> with SingleTickerProviderStateMixin {
             late AnimationController ctrl; bool spinning = false;
             @override void initState() { super.initState(); ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4)); }
             @override void dispose() { ctrl.dispose(); super.dispose(); }
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Spin Wheel', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  RotationTransition(turns: ctrl, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5), gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.red])), child: const Center(child: Text('SPIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35, color: Colors.white))))), const SizedBox(height: 60),
-                  SizedBox(width: 200, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), onPressed: spinning ? null : () { setState(() => spinning = true); ctrl.reset(); ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.easeOutCirc).then((_) { setState(() => spinning = false); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You won a super prize!', style: TextStyle(fontSize: 18)), backgroundColor: Colors.green)); }); }, child: const Text('SPIN NOW', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold))))
-                ])));
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Колесо Фортуни', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
+                body: RefreshIndicator(onRefresh: () async { await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.15), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  RotationTransition(turns: ctrl, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5), gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Color(0xFF1DB954), Colors.orange, Colors.purple, Colors.red])), child: const Center(child: Text('КРУТИ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35, color: Colors.white))))), const SizedBox(height: 60),
+                  SizedBox(width: 200, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), onPressed: spinning ? null : () { setState(() => spinning = true); ctrl.reset(); ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.easeOutCirc).then((_) { setState(() => spinning = false); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ви виграли супер-приз!', style: TextStyle(fontSize: 18)), backgroundColor: Color(0xFF1DB954))); }); }, child: const Text('КРУТИТИ', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold))))
+                ]))])));
             }
           }
-          EOF
-
-          cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
-          import 'package:flutter/material.dart';
-          class AchievementsScreen extends StatelessWidget { const AchievementsScreen({super.key}); @override Widget build(BuildContext context) { return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Achievements', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)), body: ListView(padding: const EdgeInsets.all(16), children: [_b(Icons.headphones, 'Listener', 'Listen to 10 tracks', true), _b(Icons.playlist_add_check, 'Curator', 'Create your first playlist', true), _b(Icons.star, 'Super Fan', 'Get 1000 points', false), _b(Icons.radio, 'Night DJ', 'Listen to radio at night', false)])); } Widget _b(IconData i, String t, String d, bool u) { return Card(color: u ? const Color(0xFF1E1E2C) : Colors.white10, margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: Icon(i, color: u ? Colors.amber : Colors.grey, size: 40), title: Text(t, style: TextStyle(color: u ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)), subtitle: Text(d, style: TextStyle(color: Colors.grey)), trailing: u ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.lock, color: Colors.grey))); } }
           EOF
 
           cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
@@ -345,17 +399,16 @@ jobs:
           class RadioScreen extends StatefulWidget { const RadioScreen({super.key}); @override State<RadioScreen> createState() => _RadioState(); }
           class _RadioState extends State<RadioScreen> {
             bool isPlaying = false; 
-            final radioTrack = TrackModel(id: 'radio_live', title: 'OpenWave Live', artist: 'Live Stream', audioUrl: 'https://icecast.omroep.nl/radio1-bb-mp3');
-            
+            final radioTrack = TrackModel(id: 'radio_live', title: 'OpenWave Live Radio', artist: 'Прямий Ефір', audioUrl: 'http://stream.radioreklama.bg:80/radio1128');
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: Text('radio'.tr(), style: const TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  AnimatedContainer(duration: const Duration(milliseconds: 500), width: isPlaying ? 230 : 200, height: isPlaying ? 230 : 200, decoration: BoxDecoration(shape: BoxShape.circle, color: isPlaying ? Colors.purple : const Color(0xFF6C63FF), boxShadow: isPlaying ? [BoxShadow(color: Colors.purple.withOpacity(0.6), blurRadius: 40, spreadRadius: 20)] : []), child: const Center(child: Icon(Icons.radio, size: 80, color: Colors.white))), const SizedBox(height: 50),
-                  Text(isPlaying ? '🔴 LIVE STREAM' : 'OFFLINE', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isPlaying ? Colors.redAccent : Colors.white, letterSpacing: 2)), const SizedBox(height: 10),
-                  Text(isPlaying ? 'Playing network stream...' : 'Press Play to connect', style: const TextStyle(color: Colors.grey)), const SizedBox(height: 50),
-                  IconButton(iconSize: 80, icon: Icon(isPlaying ? Icons.stop_circle : Icons.play_circle_fill, color: isPlaying ? Colors.redAccent : const Color(0xFF6C63FF)), onPressed: () { setState(() => isPlaying = !isPlaying); if(isPlaying) { SimpleAudioService().playTrack(radioTrack); } else { SimpleAudioService().player.stop(); } }), const SizedBox(height: 40),
-                  FutureBuilder<bool>(future: SupabaseService().isAdmin(), builder: (c, s) { if (s.data == true) return ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), icon: const Icon(Icons.upload, color: Colors.white), label: const Text('Upload to Radio (Admin)', style: TextStyle(color: Colors.white)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))); return const SizedBox.shrink(); })
-                ])));
+                body: RefreshIndicator(onRefresh: () async { setState((){}); await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.15), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  AnimatedContainer(duration: const Duration(milliseconds: 500), width: isPlaying ? 230 : 200, height: isPlaying ? 230 : 200, decoration: BoxDecoration(shape: BoxShape.circle, color: isPlaying ? const Color(0xFF1DB954) : const Color(0xFF282828), boxShadow: isPlaying ? [BoxShadow(color: const Color(0xFF1DB954).withOpacity(0.6), blurRadius: 40, spreadRadius: 20)] : []), child: const Center(child: Icon(Icons.radio, size: 80, color: Colors.white))), const SizedBox(height: 50),
+                  Text(isPlaying ? '🔴 LIVE ЕФІР' : 'ОФЛАЙН', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isPlaying ? Colors.white : Colors.grey, letterSpacing: 2)), const SizedBox(height: 10),
+                  Text(isPlaying ? 'Підключено до потоку...' : 'Натисніть Play', style: const TextStyle(color: Colors.grey)), const SizedBox(height: 50),
+                  IconButton(iconSize: 80, icon: Icon(isPlaying ? Icons.stop_circle : Icons.play_circle_fill, color: isPlaying ? Colors.white : const Color(0xFF1DB954)), onPressed: () { setState(() => isPlaying = !isPlaying); if(isPlaying) { SimpleAudioService().playTrack(radioTrack); } else { SimpleAudioService().player.stop(); } }), const SizedBox(height: 40),
+                  FutureBuilder<bool>(future: SupabaseService().isAdmin(), builder: (c, s) { if (s.data == true) return ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), icon: const Icon(Icons.upload, color: Colors.white), label: const Text('Завантажити (Адмін)', style: TextStyle(color: Colors.white)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))); return const SizedBox.shrink(); })
+                ]))])));
             }
           }
           EOF
@@ -365,21 +418,21 @@ jobs:
           import 'package:easy_localization/easy_localization.dart';
           class ChatListScreen extends StatefulWidget { const ChatListScreen({super.key}); @override State<ChatListScreen> createState() => _ChatState(); }
           class _ChatState extends State<ChatListScreen> {
-            final List<Map<String, dynamic>> messages = [{'text': 'Hello! How can we help?', 'isUser': false}];
+            final List<Map<String, dynamic>> messages = [{'text': 'Привіт! Чим можемо допомогти?', 'isUser': false}];
             final ctrl = TextEditingController();
             void send() { if(ctrl.text.isEmpty) return; setState(() { messages.add({'text': ctrl.text, 'isUser': true}); ctrl.clear(); }); }
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: Text('chat'.tr(), style: const TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Column(children: [
-                  Expanded(child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: messages.length, itemBuilder: (c, i) {
+                body: RefreshIndicator(onRefresh: () async { setState((){}); await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: Column(children: [
+                  Expanded(child: ListView.builder(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), itemCount: messages.length, itemBuilder: (c, i) {
                     final msg = messages[i];
-                    return Align(alignment: msg['isUser'] ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: msg['isUser'] ? const Color(0xFF6C63FF) : const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)), child: Text(msg['text'], style: const TextStyle(color: Colors.white))));
+                    return Align(alignment: msg['isUser'] ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: msg['isUser'] ? const Color(0xFF1DB954) : const Color(0xFF282828), borderRadius: BorderRadius.circular(12)), child: Text(msg['text'], style: TextStyle(color: msg['isUser'] ? Colors.black : Colors.white, fontWeight: FontWeight.bold))));
                   })),
-                  Container(padding: const EdgeInsets.all(8.0), color: const Color(0xFF1E1E2C), child: Row(children: [
-                    Expanded(child: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Your message...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.black, border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none)))), const SizedBox(width: 8),
-                    CircleAvatar(backgroundColor: const Color(0xFF6C63FF), child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: send))
+                  Container(padding: const EdgeInsets.all(8.0), color: const Color(0xFF121212), child: Row(children: [
+                    Expanded(child: TextField(controller: ctrl, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: 'Ваше повідомлення...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: const Color(0xFF282828), border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none)))), const SizedBox(width: 8),
+                    CircleAvatar(backgroundColor: const Color(0xFF1DB954), child: IconButton(icon: const Icon(Icons.send, color: Colors.black), onPressed: send))
                   ]))
-                ]));
+                ])));
             }
           }
           EOF
@@ -390,21 +443,21 @@ jobs:
           import 'package:openwave/core/services/simple_audio_service.dart';
           class FullPlayerScreen extends StatelessWidget {
             final TrackModel track; const FullPlayerScreen({super.key, required this.track});
-            String fmt(Duration? d) { if (d == null) return '0:00'; return '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}'; }
+            String fmt(Duration? d) { if (d == null) return '0:00'; return '\${d.inMinutes}:\${(d.inSeconds % 60).toString().padLeft(2, '0')}'; }
             @override Widget build(BuildContext context) {
               final p = SimpleAudioService().player;
-              return Scaffold(backgroundColor: const Color(0xFF12121A), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32), onPressed: () => Navigator.pop(context))),
+              return Scaffold(backgroundColor: const Color(0xFF121212), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32), onPressed: () => Navigator.pop(context))),
                 body: Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Container(width: 300, height: 300, decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 40, spreadRadius: 5)]), child: const Icon(Icons.music_note, size: 120, color: Color(0xFF6C63FF))), const SizedBox(height: 50),
-                  Text(track.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1), const SizedBox(height: 8), Text(track.artist, style: const TextStyle(fontSize: 18, color: Colors.grey), maxLines: 1), const SizedBox(height: 40),
+                  Container(width: MediaQuery.of(context).size.width * 0.8, height: MediaQuery.of(context).size.width * 0.8, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 40, spreadRadius: 10)], image: track.coverUrl != null ? DecorationImage(image: NetworkImage(track.coverUrl!), fit: BoxFit.cover) : null), child: track.coverUrl == null ? const Icon(Icons.music_note, size: 120, color: Color(0xFF1DB954)) : null), const SizedBox(height: 50),
+                  Align(alignment: Alignment.centerLeft, child: Text(track.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1)), const SizedBox(height: 8), Align(alignment: Alignment.centerLeft, child: Text(track.artist, style: const TextStyle(fontSize: 18, color: Colors.grey), maxLines: 1)), const SizedBox(height: 30),
                   StreamBuilder<Duration?>(stream: p.positionStream, builder: (c, posS) { return StreamBuilder<Duration?>(stream: p.durationStream, builder: (c, durS) {
                     final pos = posS.data ?? Duration.zero; final dur = durS.data ?? Duration.zero;
                     double v = pos.inSeconds.toDouble(); double m = dur.inSeconds.toDouble(); if (v > m) v = m;
-                    return Column(children: [SliderTheme(data: SliderThemeData(activeTrackColor: const Color(0xFF6C63FF), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)), child: Slider(value: m > 0 ? v : 0, max: m > 0 ? m : 1, onChanged: (nv) => p.seek(Duration(seconds: nv.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(fmt(pos), style: const TextStyle(color: Colors.grey)), Text(fmt(dur), style: const TextStyle(color: Colors.grey))])]);
+                    return Column(children: [SliderTheme(data: SliderThemeData(activeTrackColor: Colors.white, inactiveTrackColor: Colors.grey.withOpacity(0.3), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)), child: Slider(value: m > 0 ? v : 0, max: m > 0 ? m : 1, onChanged: (nv) => p.seek(Duration(seconds: nv.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(fmt(pos), style: const TextStyle(color: Colors.grey, fontSize: 12)), Text(fmt(dur), style: const TextStyle(color: Colors.grey, fontSize: 12))])]);
                   });}), const SizedBox(height: 20),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                     IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: (){}),
-                    StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF6C63FF)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
+                    StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.black, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
                     IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: (){})
                   ])
                 ])));
@@ -423,12 +476,14 @@ jobs:
             @override void initState() { super.initState(); load(); }
             Future<void> load() async { if (!mounted) return; setState(() => _l = true); try { final t = await _sb.getTracks(); if (mounted) setState(() { _t = t; _l = false; }); } catch (e) { if (mounted) setState(() => _l = false); } }
             @override Widget build(BuildContext context) {
-              return RefreshIndicator(onRefresh: load, child: CustomScrollView(slivers: [
-                const SliverAppBar(floating: true, backgroundColor: Colors.black, title: Text('OpenWave', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white))),
-                if (_l) const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))) else if (_t.isEmpty) const SliverFillRemaining(child: Center(child: Text('No tracks yet.', style: TextStyle(color: Colors.grey)))) else SliverPadding(padding: const EdgeInsets.all(16), sliver: SliverList(delegate: SliverChildBuilderDelegate((c, i) {
-                  final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)), child: ListTile(leading: const Icon(Icons.music_note, color: Color(0xFF6C63FF)), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey)), trailing: const Icon(Icons.play_circle_fill, color: Color(0xFF6C63FF), size: 32), onTap: () => SimpleAudioService().playTrack(t)));
+              return Scaffold(backgroundColor: Colors.black, body: RefreshIndicator(onRefresh: load, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: CustomScrollView(slivers: [
+                SliverAppBar(expandedHeight: 120, floating: false, pinned: true, backgroundColor: Colors.black, flexibleSpace: FlexibleSpaceBar(title: const Text('Привіт! Нові релізи', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)), background: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [const Color(0xFF1DB954).withOpacity(0.4), Colors.black]))))),
+                if (_l) const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: Color(0xFF1DB954)))) 
+                else if (_t.isEmpty) SliverFillRemaining(child: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('База пуста.\n\nЯкщо ви щойно завантажили трек, зайдіть в Supabase -> Authentication -> Policies та ВИМКНІТЬ RLS для таблиці "tracks" (або дозвольте читання для всіх). Інакше додаток їх не побачить!', textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 16)))) ) 
+                else SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((c, i) {
+                  final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8)), child: ListTile(contentPadding: const EdgeInsets.all(8), leading: t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 55, height: 55, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 55, height: 55, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))))) : Container(width: 55, height: 55, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 14)), trailing: const Icon(Icons.more_vert, color: Colors.grey), onTap: () => SimpleAudioService().playTrack(t)));
                 }, childCount: _t.length)))
-              ]));
+              ])));
             }
           }
           EOF
@@ -443,25 +498,25 @@ jobs:
           import 'package:openwave/features/admin/presentation/screens/admin_screen.dart';
           import 'package:openwave/core/services/supabase_service.dart';
           import 'package:easy_localization/easy_localization.dart';
-          class ProfileTab extends StatelessWidget {
-            const ProfileTab({super.key});
+          class ProfileTab extends StatefulWidget { const ProfileTab({super.key}); @override State<ProfileTab> createState() => _PTState(); }
+          class _PTState extends State<ProfileTab> {
             @override Widget build(BuildContext context) {
               final u = Supabase.instance.client.auth.currentUser;
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: Text('profile'.tr(), style: const TextStyle(color: Colors.white)), backgroundColor: Colors.black, actions: [IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: () => Supabase.instance.client.auth.signOut())]),
-                body: ListView(padding: const EdgeInsets.all(16), children: [
-                  const Center(child: CircleAvatar(radius: 50, backgroundColor: Color(0xFF6C63FF), child: Icon(Icons.person, size: 50, color: Colors.white))), const SizedBox(height: 20), Center(child: Text(u?.email ?? 'User', style: const TextStyle(fontSize: 20, color: Colors.white))), const SizedBox(height: 40),
-                  buildCard(context, Icons.card_giftcard, 'Daily Reward', Colors.orange, const DailyRewardScreen()), buildCard(context, Icons.casino, 'Spin Wheel', Colors.pink, const SpinWheelScreen()), buildCard(context, Icons.radio, 'radio'.tr(), Colors.blue, const RadioScreen()), buildCard(context, Icons.chat, 'chat'.tr(), Colors.teal, const ChatListScreen()), const Divider(color: Colors.grey, height: 40),
-                  FutureBuilder<bool>(future: SupabaseService().isAdmin(), builder: (c, s) { if (s.data == true) return ListTile(leading: const Icon(Icons.cloud_upload, color: Colors.green), title: const Text('Upload Track (Admin)', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))); return const SizedBox.shrink(); }),
-                  const Divider(color: Colors.grey, height: 40),
-                  ListTile(leading: const Icon(Icons.language, color: Colors.white), title: const Text('Вибір мови / Change Language', style: TextStyle(color: Colors.white)), onTap: () {
-                    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E1E2C), builder: (c) => ListView(shrinkWrap: true, children: [
-                      _lang(context, 'uk', 'Українська'), _lang(context, 'en', 'English'), _lang(context, 'pl', 'Polski'), _lang(context, 'es', 'Español'), _lang(context, 'de', 'Deutsch'), _lang(context, 'fr', 'Français'), _lang(context, 'cs', 'Čeština'), _lang(context, 'ru', 'Русский')
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: Text('profile'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: Colors.black, actions: [IconButton(icon: const Icon(Icons.logout, color: Colors.grey), onPressed: () => Supabase.instance.client.auth.signOut())]),
+                body: RefreshIndicator(onRefresh: () async { setState((){}); await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
+                  const Center(child: CircleAvatar(radius: 50, backgroundColor: Color(0xFF282828), child: Icon(Icons.person, size: 50, color: Color(0xFF1DB954)))), const SizedBox(height: 20), Center(child: Text(u?.email ?? 'Користувач', style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold))), const SizedBox(height: 40),
+                  buildCard(context, Icons.card_giftcard, 'Щоденна Нагорода', Colors.orange, const DailyRewardScreen()), buildCard(context, Icons.casino, 'Колесо Фортуни', Colors.pink, const SpinWheelScreen()), buildCard(context, Icons.radio, 'radio'.tr(), Colors.blue, const RadioScreen()), buildCard(context, Icons.chat, 'chat'.tr(), Colors.teal, const ChatListScreen()), const Divider(color: Color(0xFF282828), height: 40, thickness: 1),
+                  FutureBuilder<bool>(future: SupabaseService().isAdmin(), builder: (c, s) { if (s.data == true) return ListTile(leading: const Icon(Icons.cloud_upload, color: Color(0xFF1DB954)), title: const Text('Завантажити Трек (Адмін)', style: TextStyle(color: Color(0xFF1DB954), fontWeight: FontWeight.bold)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))); return const SizedBox.shrink(); }),
+                  const Divider(color: Color(0xFF282828), height: 40, thickness: 1),
+                  ListTile(leading: const Icon(Icons.language, color: Colors.white), title: const Text('Вибір мови / Change Language', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), onTap: () {
+                    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF121212), builder: (c) => ListView(shrinkWrap: true, padding: const EdgeInsets.symmetric(vertical: 10), children: [
+                      _lang(context, 'uk', '🇺🇦 Українська'), _lang(context, 'en', '🇬🇧 English'), _lang(context, 'pl', '🇵🇱 Polski'), _lang(context, 'es', '🇪🇸 Español'), _lang(context, 'de', '🇩🇪 Deutsch'), _lang(context, 'fr', '🇫🇷 Français'), _lang(context, 'cs', '🇨🇿 Čeština'), _lang(context, 'ru', '🇷🇺 Русский')
                     ]));
                   })
-                ]));
+                ])));
             }
-            Widget buildCard(BuildContext c, IconData i, String t, Color col, Widget d) { return Card(color: const Color(0xFF1E1E2C), margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: Icon(i, color: col), title: Text(t, style: const TextStyle(color: Colors.white)), trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16), onTap: () => Navigator.push(c, MaterialPageRoute(builder: (_) => d)))); }
-            Widget _lang(BuildContext c, String code, String name) { return ListTile(title: Text(name, style: const TextStyle(color: Colors.white)), onTap: () { c.setLocale(Locale(code)); Navigator.pop(c); }); }
+            Widget buildCard(BuildContext c, IconData i, String t, Color col, Widget d) { return Card(color: const Color(0xFF121212), elevation: 0, margin: const EdgeInsets.only(bottom: 8), child: ListTile(leading: Icon(i, color: col), title: Text(t, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)), trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16), onTap: () => Navigator.push(c, MaterialPageRoute(builder: (_) => d)))); }
+            Widget _lang(BuildContext c, String code, String name) { return ListTile(title: Text(name, style: const TextStyle(color: Colors.white, fontSize: 16)), onTap: () { c.setLocale(Locale(code)); Navigator.pop(c); }); }
           }
           EOF
 
@@ -481,9 +536,11 @@ jobs:
                 Positioned.fill(child: IndexedStack(index: idx, children: pages)),
                 Positioned(bottom: 0, left: 0, right: 0, child: ValueListenableBuilder<TrackModel?>(valueListenable: SimpleAudioService().currentTrack, builder: (c, t, ch) {
                   if (t == null) return const SizedBox.shrink();
-                  return GestureDetector(onTap: () { showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => FullPlayerScreen(track: t)); }, child: Container(height: 65, decoration: const BoxDecoration(color: Color(0xFF2C2C3E)), padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [const Icon(Icons.music_note, color: Colors.white), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(t.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1), Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1)])), StreamBuilder<bool>(stream: SimpleAudioService().player.playingStream, builder: (c, s) { final p = s.data ?? false; return IconButton(icon: Icon(p ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.greenAccent, size: 36), onPressed: () => SimpleAudioService().togglePlayPause()); }) ])));
+                  return GestureDetector(onTap: () { showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => FullPlayerScreen(track: t)); }, child: Container(height: 65, margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
+                     t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (c,e,s)=>const Icon(Icons.music_note, color: Colors.white))) : const Icon(Icons.music_note, color: Colors.white), 
+                     const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(t.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1), Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1)])), StreamBuilder<bool>(stream: SimpleAudioService().player.playingStream, builder: (c, s) { final p = s.data ?? false; return IconButton(icon: Icon(p ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 30), onPressed: () => SimpleAudioService().togglePlayPause()); }) ])));
                 }))
-              ]), bottomNavigationBar: BottomNavigationBar(currentIndex: idx, onTap: (i) => setState(() => idx = i), backgroundColor: const Color(0xFF1E1E2C), selectedItemColor: const Color(0xFF6C63FF), unselectedItemColor: Colors.grey, items: [BottomNavigationBarItem(icon: const Icon(Icons.home), label: 'home'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.library_music), label: 'library'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.person), label: 'profile'.tr())]));
+              ]), bottomNavigationBar: Theme(data: ThemeData(splashColor: Colors.transparent, highlightColor: Colors.transparent), child: BottomNavigationBar(type: BottomNavigationBarType.fixed, currentIndex: idx, onTap: (i) => setState(() => idx = i), backgroundColor: Colors.black, selectedItemColor: Colors.white, unselectedItemColor: Colors.grey.withOpacity(0.6), selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), unselectedLabelStyle: const TextStyle(fontSize: 12), items: [BottomNavigationBarItem(icon: const Icon(Icons.home_filled), label: 'home'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.my_library_music), label: 'library'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.person), label: 'profile'.tr())])));
             }
           }
           EOF
@@ -500,7 +557,7 @@ jobs:
             await EasyLocalization.ensureInitialized();
             try { await Supabase.initialize(url: 'https://nmowlkjoragnffkxbrzq.supabase.co', anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYyNjcsImV4cCI6MjA4ODY3MjI2N30.yNHTyZfXOjy-lJNxCOm8F9_YVGWF6kGWmueFYBHTfI0'); } catch (e) {}
             try { await JustAudioBackground.init(androidNotificationChannelId: 'com.openwave.app.audio', androidNotificationChannelName: 'Audio playback', androidNotificationOngoing: true); } catch (e) {}
-            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('System Error. Details:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
+            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Критична помилка:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
             runApp(EasyLocalization(
               supportedLocales: const [Locale('uk'), Locale('en'), Locale('pl'), Locale('es'), Locale('de'), Locale('fr'), Locale('cs'), Locale('ru')],
               path: 'assets/translations',
@@ -510,7 +567,7 @@ jobs:
           }
           class OpenWaveApp extends StatelessWidget {
             const OpenWaveApp({super.key});
-            @override Widget build(BuildContext context) { return MaterialApp(title: 'OpenWave', debugShowCheckedModeBanner: false, localizationsDelegates: context.localizationDelegates, supportedLocales: context.supportedLocales, locale: context.locale, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF6C63FF)), home: StreamBuilder<AuthState>(stream: Supabase.instance.client.auth.onAuthStateChange, builder: (c, s) { if (s.data?.session != null) return const MainScreen(); return const SimpleAuthScreen(); })); }
+            @override Widget build(BuildContext context) { return MaterialApp(title: 'OpenWave', debugShowCheckedModeBanner: false, localizationsDelegates: context.localizationDelegates, supportedLocales: context.supportedLocales, locale: context.locale, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF1DB954)), home: StreamBuilder<AuthState>(stream: Supabase.instance.client.auth.onAuthStateChange, builder: (c, s) { if (s.data?.session != null) return const MainScreen(); return const SimpleAuthScreen(); })); }
           }
           EOF
 
@@ -533,3 +590,4 @@ jobs:
           path: |
             ${{ env.FLUTTER_DIR }}/build/app/outputs/flutter-apk/app-release.apk
             ${{ env.FLUTTER_DIR }}/build/app/outputs/bundle/release/app-release.aab
+  
