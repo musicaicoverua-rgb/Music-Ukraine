@@ -42,16 +42,27 @@ jobs:
       - name: 6. Configure Android and Pubspec
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
+          # Створюємо всі необхідні папки
           mkdir -p android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/values
-          mkdir -p assets/images assets/animations
+          mkdir -p assets/images assets/animations assets/icons assets/fonts
           
+          # Налаштування Android
           echo "kotlin_version=1.9.0" >> android/gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.minSdkVersion=24" >> android/local.properties
           
-          touch assets/images/logo.png assets/images/default_cover.png
+          # 1. ШТУЧНО СТВОРЮЄМО ІКОНКИ (Справжня картинка через Base64)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/logo.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/default_cover.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/icons/icon.png
+          
+          # 2. ШТУЧНО СТВОРЮЄМО ШРИФТ (Копіюємо системний шрифт, щоб файл не був пустим)
+          cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf assets/fonts/Inter-Regular.ttf || echo "fake_font_data" > assets/fonts/Inter-Regular.ttf
+          
           echo "{}" > assets/animations/loading.json
           
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
@@ -65,7 +76,7 @@ jobs:
           python3 - << 'EOF'
           import os, re
           
-          # Fix pubspec.yaml with full duplicate protection
+          # Очищення pubspec.yaml
           with open('pubspec.yaml', 'r', encoding='utf-8') as f: p = f.read()
           p = re.sub(r'^\s*just_audio:.*?\n', '', p, flags=re.MULTILINE)
           p = re.sub(r'^\s*just_audio_background:.*?\n', '', p, flags=re.MULTILINE)
@@ -73,13 +84,13 @@ jobs:
           p = re.sub(r'^\s*build_runner:.*?\n', '', p, flags=re.MULTILINE)
           p = re.sub(r'^\s*json_serializable:.*?\n', '', p, flags=re.MULTILINE)
           p = re.sub(r'^\s*json_annotation:.*?\n', '', p, flags=re.MULTILINE)
-          p = re.sub(r'^\s*file_picker:.*?\n', '', p, flags=re.MULTILINE) # FIXED THE LATEST ERROR HERE
+          p = re.sub(r'^\s*file_picker:.*?\n', '', p, flags=re.MULTILINE)
           
           p = p.replace('dependencies:', 'dependencies:\n  just_audio: ^0.9.36\n  just_audio_background: ^0.0.1-beta.13\n  supabase_flutter: ^2.0.0\n  file_picker: ^6.1.1\n')
           if 'dependency_overrides:' not in p: p += '\ndependency_overrides:\n  intl: ^0.19.0\n  web: ^0.5.0\n'
           with open('pubspec.yaml', 'w', encoding='utf-8') as f: f.write(p)
           
-          # Fix Gradle Kotlin Version
+          # Фікс версії Kotlin
           g_path = 'android/build.gradle'
           if os.path.exists(g_path):
               with open(g_path, 'r') as f: g = f.read()
@@ -88,7 +99,15 @@ jobs:
               else: g = "buildscript {\n    ext.kotlin_version = '1.9.0'\n}\n" + g
               with open(g_path, 'w') as f: f.write(g)
               
-          # Fix AndroidManifest.xml
+          # ФІКС ANDROID SDK 35 (ДЛЯ SQLITE)
+          app_g_path = 'android/app/build.gradle'
+          if os.path.exists(app_g_path):
+              with open(app_g_path, 'r', encoding='utf-8') as f: ag = f.read()
+              ag = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 35', ag)
+              ag = re.sub(r'compileSdk\s+\d+', 'compileSdk 35', ag)
+              with open(app_g_path, 'w', encoding='utf-8') as f: f.write(ag)
+              
+          # Фікс маніфесту
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r', encoding='utf-8') as f: m = f.read()
@@ -99,7 +118,7 @@ jobs:
                   m = m.replace('</activity>', '</activity>\n        <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver" android:exported="true"><intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter></receiver>\n        <service android:name="com.ryanheise.audioservice.AudioService" android:foregroundServiceType="mediaPlayback" android:exported="true"><intent-filter><action android:name="android.media.browse.MediaBrowserService" /></intent-filter></service>')
               with open(m_path, 'w', encoding='utf-8') as f: f.write(m)
               
-          # Fix MainActivity inheritance
+          # Фікс MainActivity
           for r, d, fs in os.walk('android/app/src/main'):
               for f in fs:
                   if f in ['MainActivity.kt', 'MainActivity.java']:
@@ -108,7 +127,7 @@ jobs:
                       pkg = re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt).group(1) if re.search(r'package\s+([a-zA-Z0-9_\.]+)', txt) else "com.openwave.app"
                       with open(p_path, 'w') as fl: fl.write(f"package {pkg}\nimport io.flutter.embedding.android.FlutterActivity\nimport com.ryanheise.audioservice.AudioServiceActivity\nclass MainActivity: AudioServiceActivity() {{}}\n")
           
-          # Fix legacy drift errors
+          # Фікс багів старої бази Drift
           def rep(m):
               t, c = m.group(1), m.group(2)
               if 'Companion' in c: return f"(delete({t})..where((tbl) => tbl.id.equals({re.search(r'id:\s*Value\((.*?)\)', c).group(1)}))).go();"
