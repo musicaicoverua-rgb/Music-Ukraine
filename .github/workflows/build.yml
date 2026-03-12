@@ -188,6 +188,11 @@ jobs:
           }
           EOF
 
+          cat << 'EOF' > lib/core/models/playlist_model.dart
+          import 'track_model.dart';
+          class PlaylistModel { final String id, name; final List<TrackModel> tracks; PlaylistModel({required this.id, required this.name, required this.tracks}); }
+          EOF
+
           cat << 'EOF' > lib/core/services/supabase_service.dart
           import 'dart:io';
           import 'package:flutter/foundation.dart';
@@ -199,10 +204,9 @@ jobs:
             Future<List<TrackModel>> getTracks() async { 
               try { 
                 final response = await _c.from('tracks').select().order('created_at', ascending: false);
-                debugPrint('Успішно отримано треків: \${response.length}');
                 return (response as List).map((e) => TrackModel.fromJson(e as Map<String, dynamic>)).toList(); 
               } catch(e) { 
-                debugPrint('ПОМИЛКА БАЗИ ДАНИХ (RLS або відсутня таблиця): \$e');
+                debugPrint('ПОМИЛКА БАЗИ ДАНИХ (RLS): $e');
                 return []; 
               } 
             }
@@ -219,7 +223,7 @@ jobs:
               try {
                 final audioFile = File(audioPath);
                 final audioExt = audioPath.split('.').last;
-                final audioName = 'track_\${DateTime.now().millisecondsSinceEpoch}.$audioExt';
+                final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
                 await _c.storage.from('tracks').upload(audioName, audioFile);
                 final audioUrl = _c.storage.from('tracks').getPublicUrl(audioName);
 
@@ -227,7 +231,7 @@ jobs:
                 if (imagePath != null) {
                   final imgFile = File(imagePath);
                   final imgExt = imagePath.split('.').last;
-                  final imgName = 'cover_\${DateTime.now().millisecondsSinceEpoch}.$imgExt';
+                  final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}.$imgExt';
                   await _c.storage.from('covers').upload(imgName, imgFile);
                   imageUrl = _c.storage.from('covers').getPublicUrl(imgName);
                 }
@@ -240,7 +244,7 @@ jobs:
                 });
                 return true;
               } catch(e) {
-                debugPrint('Upload Error: \$e');
+                debugPrint('Upload Error: $e');
                 return false;
               }
             }
@@ -268,19 +272,12 @@ jobs:
                   if (!url.startsWith('http')) {
                     url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
                   }
-                  
-                  // ІДЕАЛЬНЕ ОЧИЩЕННЯ ПОСИЛАНЬ ДЛЯ ПЛЕЄРА
                   url = url.trim().replaceAll(' ', '%20');
-                  debugPrint('Відтворюється URL: \$url');
-                  
-                  String art = track.coverUrl ?? 'https://ui-avatars.com/api/?name=\${track.title}&background=random';
-                  
+                  String art = track.coverUrl ?? 'https://ui-avatars.com/api/?name=${track.title}&background=random';
                   await player.setAudioSource(AudioSource.uri(Uri.parse(url), tag: MediaItem(id: track.id.toString(), album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse(art))));
                   player.play();
-                } else {
-                  debugPrint('ПОМИЛКА: audioUrl порожній');
                 }
-              } catch (e) { debugPrint('ПОМИЛКА ПЛЕЄРА: \$e'); }
+              } catch (e) { debugPrint('ERROR: $e'); }
             }
             void togglePlayPause() { player.playing ? player.pause() : player.play(); }
           }
@@ -319,19 +316,16 @@ jobs:
           }
           EOF
           
-          cat << 'EOF' > lib/features/admin/presentation/screens/admin_screen.dart
+          cat << 'EOF'  > lib/features/admin/presentation/screens/admin_screen.dart
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
           import 'package:openwave/core/services/supabase_service.dart';
           class AdminScreen extends StatefulWidget { const AdminScreen({super.key}); @override State<AdminScreen> createState() => _AdminState(); }
           class _AdminState extends State<AdminScreen> {
             bool isLoading = false; final titleCtrl = TextEditingController(); final artistCtrl = TextEditingController(); 
-            String? audioPath; String? audioName;
-            String? imagePath; String? imageName;
-            
+            String? audioPath; String? audioName; String? imagePath; String? imageName;
             void pickAudio() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio); if (result != null) { setState(() { audioPath = result.files.single.path; audioName = result.files.single.name; }); } }
             void pickImage() async { FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image); if (result != null) { setState(() { imagePath = result.files.single.path; imageName = result.files.single.name; }); } }
-            
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Завантажити Трек', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
                 body: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -345,11 +339,8 @@ jobs:
                     bool success = await SupabaseService().uploadNewTrack(titleCtrl.text, artistCtrl.text, audioPath!, imagePath);
                     setState(()=>isLoading=false); 
                     if(!mounted)return;
-                    if(success) {
-                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
-                    } else {
-                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка. Перевірте публічність бакетів у Supabase.'), backgroundColor: Colors.red));
-                    }
+                    if(success) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
+                    } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка. Перевірте публічність бакетів у Supabase.'), backgroundColor: Colors.red)); }
                   }, child: isLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('ЗАВАНТАЖИТИ В БАЗУ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))))
                 ])));
             }
@@ -365,7 +356,7 @@ jobs:
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Щоденна нагорода', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
                 body: RefreshIndicator(onRefresh: () async { await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.2), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.card_giftcard, size: 140, color: claimed ? Colors.grey : const Color(0xFF1DB954)), const SizedBox(height: 30),
-                  Text(claimed ? 'Ви отримали \$reward монет!' : 'Ваш подарунок готовий!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
+                  Text(claimed ? 'Ви отримали $reward монет!' : 'Ваш подарунок готовий!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
                   SizedBox(width: 200, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: claimed ? Colors.grey : const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: claimed ? null : () => setState(() { reward = Random().nextInt(50) + 10; claimed = true; }), child: Text(claimed ? 'Приходьте завтра' : 'ВІДКРИТИ', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18))))
                 ]))])));
             }
@@ -387,6 +378,11 @@ jobs:
                 ]))])));
             }
           }
+          EOF
+
+          cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
+          import 'package:flutter/material.dart';
+          class AchievementsScreen extends StatelessWidget { const AchievementsScreen({super.key}); @override Widget build(BuildContext context) { return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Achievements', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)), body: ListView(padding: const EdgeInsets.all(16), children: [_b(Icons.headphones, 'Listener', 'Listen to 10 tracks', true), _b(Icons.playlist_add_check, 'Curator', 'Create your first playlist', true), _b(Icons.star, 'Super Fan', 'Get 1000 points', false), _b(Icons.radio, 'Night DJ', 'Listen to radio at night', false)])); } Widget _b(IconData i, String t, String d, bool u) { return Card(color: u ? const Color(0xFF1E1E2C) : Colors.white10, margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: Icon(i, color: u ? Colors.amber : Colors.grey, size: 40), title: Text(t, style: TextStyle(color: u ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)), subtitle: Text(d, style: TextStyle(color: Colors.grey)), trailing: u ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.lock, color: Colors.grey))); } }
           EOF
 
           cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
@@ -443,7 +439,7 @@ jobs:
           import 'package:openwave/core/services/simple_audio_service.dart';
           class FullPlayerScreen extends StatelessWidget {
             final TrackModel track; const FullPlayerScreen({super.key, required this.track});
-            String fmt(Duration? d) { if (d == null) return '0:00'; return '\${d.inMinutes}:\${(d.inSeconds % 60).toString().padLeft(2, '0')}'; }
+            String fmt(Duration? d) { if (d == null) return '0:00'; return '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}'; }
             @override Widget build(BuildContext context) {
               final p = SimpleAudioService().player;
               return Scaffold(backgroundColor: const Color(0xFF121212), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32), onPressed: () => Navigator.pop(context))),
@@ -475,14 +471,27 @@ jobs:
             final _sb = SupabaseService(); List<TrackModel> _t = []; bool _l = true;
             @override void initState() { super.initState(); load(); }
             Future<void> load() async { if (!mounted) return; setState(() => _l = true); try { final t = await _sb.getTracks(); if (mounted) setState(() { _t = t; _l = false; }); } catch (e) { if (mounted) setState(() => _l = false); } }
+            
+            String greeting() { var hour = DateTime.now().hour; if (hour < 12) return 'Доброго ранку'; if (hour < 18) return 'Доброго дня'; return 'Доброго вечора'; }
+
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, body: RefreshIndicator(onRefresh: load, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: CustomScrollView(slivers: [
-                SliverAppBar(expandedHeight: 120, floating: false, pinned: true, backgroundColor: Colors.black, flexibleSpace: FlexibleSpaceBar(title: const Text('Привіт! Нові релізи', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)), background: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [const Color(0xFF1DB954).withOpacity(0.4), Colors.black]))))),
-                if (_l) const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: Color(0xFF1DB954)))) 
-                else if (_t.isEmpty) SliverFillRemaining(child: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('База пуста.\n\nЯкщо ви щойно завантажили трек, зайдіть в Supabase -> Authentication -> Policies та ВИМКНІТЬ RLS для таблиці "tracks" (або дозвольте читання для всіх). Інакше додаток їх не побачить!', textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontSize: 16)))) ) 
-                else SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), sliver: SliverList(delegate: SliverChildBuilderDelegate((c, i) {
-                  final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8)), child: ListTile(contentPadding: const EdgeInsets.all(8), leading: t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 55, height: 55, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 55, height: 55, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))))) : Container(width: 55, height: 55, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 14)), trailing: const Icon(Icons.more_vert, color: Colors.grey), onTap: () => SimpleAudioService().playTrack(t)));
-                }, childCount: _t.length)))
+              return Scaffold(backgroundColor: Colors.black, body: RefreshIndicator(onRefresh: load, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: ListView(padding: EdgeInsets.zero, physics: const AlwaysScrollableScrollPhysics(), children: [
+                Container(padding: const EdgeInsets.fromLTRB(16, 60, 16, 20), decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [const Color(0xFF1DB954).withOpacity(0.4), Colors.black])), child: Text(greeting(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white))),
+                if (_l) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: Color(0xFF1DB954)))) 
+                else if (_t.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('База пуста.\n\nЯкщо ви щойно завантажили трек, зайдіть в Supabase -> Authentication -> Policies та ВИМКНІТЬ RLS для таблиці "tracks"!', textAlign: TextAlign.center, style: TextStyle(color: Colors.redAccent, fontSize: 16))) 
+                else ...[
+                  const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Text('Нові релізи', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
+                  SizedBox(height: 160, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), itemCount: _t.length > 5 ? 5 : _t.length, itemBuilder: (c, i) {
+                    final track = _t[i]; return GestureDetector(onTap: () => SimpleAudioService().playTrack(track), child: Container(width: 120, margin: const EdgeInsets.symmetric(horizontal: 4), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      ClipRRect(borderRadius: BorderRadius.circular(8), child: track.coverUrl != null ? Image.network(track.coverUrl!, width: 120, height: 120, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 120, height: 120, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954), size: 40))) : Container(width: 120, height: 120, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954), size: 40))),
+                      const SizedBox(height: 8), Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)
+                    ])));
+                  })),
+                  const Padding(padding: EdgeInsets.fromLTRB(16, 24, 16, 8), child: Text('Всі треки', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
+                  ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: _t.length, itemBuilder: (c, i) {
+                    final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8)), child: ListTile(contentPadding: const EdgeInsets.all(8), leading: t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 55, height: 55, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 55, height: 55, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))))) : Container(width: 55, height: 55, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 14)), trailing: const Icon(Icons.more_vert, color: Colors.grey), onTap: () => SimpleAudioService().playTrack(t)));
+                  })
+                ]
               ])));
             }
           }
@@ -557,7 +566,7 @@ jobs:
             await EasyLocalization.ensureInitialized();
             try { await Supabase.initialize(url: 'https://nmowlkjoragnffkxbrzq.supabase.co', anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYyNjcsImV4cCI6MjA4ODY3MjI2N30.yNHTyZfXOjy-lJNxCOm8F9_YVGWF6kGWmueFYBHTfI0'); } catch (e) {}
             try { await JustAudioBackground.init(androidNotificationChannelId: 'com.openwave.app.audio', androidNotificationChannelName: 'Audio playback', androidNotificationOngoing: true); } catch (e) {}
-            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Критична помилка:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
+            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('System Error:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
             runApp(EasyLocalization(
               supportedLocales: const [Locale('uk'), Locale('en'), Locale('pl'), Locale('es'), Locale('de'), Locale('fr'), Locale('cs'), Locale('ru')],
               path: 'assets/translations',
@@ -590,4 +599,3 @@ jobs:
           path: |
             ${{ env.FLUTTER_DIR }}/build/app/outputs/flutter-apk/app-release.apk
             ${{ env.FLUTTER_DIR }}/build/app/outputs/bundle/release/app-release.aab
-  
