@@ -257,7 +257,7 @@ jobs:
             @override void dispose() { ctrl.dispose(); super.dispose(); }
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Колесо Фортуни', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
-                body: Center(child: Column(mainAxisAlignment.center, children: [
+                body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   RotationTransition(turns: ctrl, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5), gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.red])), child: const Center(child: Text('КРУТИ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35, color: Colors.white))))), const SizedBox(height: 60),
                   SizedBox(width: 200, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), onPressed: spinning ? null : () { setState(() => spinning = true); ctrl.reset(); ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.easeOutCirc).then((_) { setState(() => spinning = false); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ви виграли супер-приз!', style: TextStyle(fontSize: 18)), backgroundColor: Colors.green)); }); }, child: const Text('КРУТИТИ', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold))))
                 ])));
@@ -435,3 +435,8 @@ jobs:
         with:
           name: OpenWave-Final-App
           path: "**/build/app/outputs/flutter-apk/*.apk"
+
+
+
+
+
