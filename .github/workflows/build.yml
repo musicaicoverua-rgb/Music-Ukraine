@@ -71,7 +71,9 @@ jobs:
             cp assets/images/logo.png "assets/icons/$icon"
           done
           
+          # СТВОРЮЄМО АНІМАЦІЇ, ЯКІ ВИМАГАЄ PUBSPEC (loading та success)
           echo "{}" > assets/animations/loading.json
+          echo "{}" > assets/animations/success.json
           
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
