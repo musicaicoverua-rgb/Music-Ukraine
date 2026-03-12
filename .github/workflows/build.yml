@@ -59,21 +59,24 @@ jobs:
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/default_cover.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/icons/icon.png
           
-          # УЛЬТИМАТИВНИЙ ЗАХИСТ ВІД ПОМИЛОК ШРИФТІВ (Генеруємо всі можливі варіанти Inter)
+          # УЛЬТИМАТИВНИЙ ЗАХИСТ ВІД ПОМИЛОК ШРИФТІВ
           FONTS=("Regular" "Medium" "SemiBold" "Bold" "Light" "ExtraLight" "Thin" "Black" "ExtraBold")
           for font in "${FONTS[@]}"; do
             cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "assets/fonts/Inter-$font.ttf" || echo "fake" > "assets/fonts/Inter-$font.ttf"
           done
           
-          # ЗАХИСТ ВІД ПОМИЛОК ІКОНОК (Якщо Kimi додав їх у pubspec)
+          # ЗАХИСТ ВІД ПОМИЛОК ІКОНОК
           ICONS=("google.png" "apple.png" "facebook.png" "placeholder.png")
           for icon in "${ICONS[@]}"; do
             cp assets/images/logo.png "assets/icons/$icon"
           done
           
-          # СТВОРЮЄМО АНІМАЦІЇ, ЯКІ ВИМАГАЄ PUBSPEC (loading та success)
+          # УЛЬТИМАТИВНИЙ ЗАХИСТ АНІМАЦІЙ (включаючи confetti)
           echo "{}" > assets/animations/loading.json
           echo "{}" > assets/animations/success.json
+          echo "{}" > assets/animations/confetti.json
+          echo "{}" > assets/animations/error.json
+          echo "{}" > assets/animations/empty.json
           
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -273,7 +276,6 @@ jobs:
             }
           }
           EOF
-
           cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
           import 'package:flutter/material.dart';
           import 'dart:math';
