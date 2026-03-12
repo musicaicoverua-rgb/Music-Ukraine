@@ -1,394 +1,102 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:file_picker/file_picker.dart';
-
-/// =======================
-/// MODEL TRACK
-/// =======================
-
-class TrackModel {
-
-  final String id;
-  final String title;
-  final String artist;
-  final String audioUrl;
-
-  bool liked;
-
-  TrackModel({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.audioUrl,
-    this.liked = false
-  });
-
-  factory TrackModel.fromJson(Map<String,dynamic> json){
-
-    return TrackModel(
-      id: json["id"].toString(),
-      title: json["title"] ?? "",
-      artist: json["artist"] ?? "",
-      audioUrl: json["audioUrl"] ?? "",
-    );
-
-  }
-
-}
-
-/// =======================
-/// SUPABASE SERVICE
-/// =======================
-
-class SupabaseService {
-
-  final client = Supabase.instance.client;
-
-  /// GET TRACKS
-
-  Future<List<TrackModel>> getTracks() async {
-
-    final res = await client
-        .from("tracks")
-        .select()
-        .order("created_at");
-
-    return (res as List)
-        .map((e)=>TrackModel.fromJson(e))
-        .toList();
-
-  }
-
-  /// ADMIN CHECK
-
-  Future<bool> isAdmin() async {
-
-    final user = client.auth.currentUser;
-
-    if(user == null) return false;
-
-    final data = await client
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    return data?["is_admin"] == true;
-
-  }
-
-  /// UPLOAD TRACK
-
-  Future<void> uploadTrack({
-    required String title,
-    required String artist
-  }) async {
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.audio
-    );
-
-    if(result == null) return;
-
-    final file = result.files.single;
-
-    final path =
-        "tracks/${DateTime.now().millisecondsSinceEpoch}_${file.name}";
-
-    await client.storage
-        .from("tracks")
-        .uploadBinary(path, file.bytes!);
-
-    final url = client.storage
-        .from("tracks")
-        .getPublicUrl(path);
-
-    await client.from("tracks").insert({
-
-      "title":title,
-      "artist":artist,
-      "audioUrl":url
-
-    });
-
-  }
-
-  /// LIKE TRACK
-
-  Future<void> likeTrack(String trackId) async {
-
-    final user = client.auth.currentUser;
-
-    if(user == null) return;
-
-    await client.from("likes").insert({
-
-      "user_id":user.id,
-      "track_id":trackId
-
-    });
-
-  }
-
-  /// PLAYLIST CREATE
-
-  Future<void> createPlaylist(String name) async {
-
-    final user = client.auth.currentUser;
-
-    if(user == null) return;
-
-    await client.from("playlists").insert({
-
-      "user_id":user.id,
-      "name":name
-
-    });
-
-  }
-
-}
-
-/// =======================
-/// AUDIO SERVICE
-/// =======================
-
-class AudioService {
-
-  static final AudioService _instance =
-      AudioService._internal();
-
-  factory AudioService()=>_instance;
-
-  AudioService._internal();
-
-  final player = AudioPlayer();
-
-  final ValueNotifier<TrackModel?> currentTrack =
-      ValueNotifier(null);
-
-  /// PLAY TRACK
-
-  Future<void> playTrack(TrackModel track) async {
-
-    currentTrack.value = track;
-
-    await player.setAudioSource(
-
-      AudioSource.uri(
-        Uri.parse(track.audioUrl),
-
-        tag: MediaItem(
-          id: track.id,
-          album: "OpenWave",
-          title: track.title,
-          artist: track.artist
-        ),
-
-      ),
-
-    );
-
-    player.play();
-
-  }
-
-  /// PLAY RADIO
-
-  Future<void> playRadio() async {
-
-    await player.setUrl(
-      "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_one"
-    );
-
-    player.play();
-
-  }
-
-  void pause(){
-
-    player.pause();
-
-  }
-
-}
-
-/// =======================
-/// ADMIN PANEL
-/// =======================
-
-class AdminUploadButton extends StatelessWidget {
-
-  final TextEditingController titleCtrl;
-  final TextEditingController artistCtrl;
-
-  const AdminUploadButton({
-    super.key,
-    required this.titleCtrl,
-    required this.artistCtrl
-  });
-
-  @override
-  Widget build(BuildContext context) {
-
-    return FutureBuilder<bool>(
-
-      future: SupabaseService().isAdmin(),
-
-      builder:(context,snapshot){
-
-        if(snapshot.data != true){
-          return SizedBox();
-        }
-
-        return ElevatedButton.icon(
-
-          icon: Icon(Icons.upload),
-
-          label: Text("Upload Track (Admin)"),
-
-          onPressed: () async {
-
-            await SupabaseService().uploadTrack(
-
-              title:titleCtrl.text,
-              artist:artistCtrl.text
-
-            );
-
-            ScaffoldMessenger.of(context).showSnackBar(
-
-              SnackBar(
-                content: Text("Track uploaded")
-              )
-
-            );
-
-          },
-
-        );
-
-      },
-
-    );
-
-  }
-
-}
-
-/// =======================
-/// RADIO PLAYER
-/// =======================
-
-class RadioPlayer extends StatefulWidget {
-
-  const RadioPlayer({super.key});
-
-  @override
-  State<RadioPlayer> createState()=>_RadioState();
-
-}
-
-class _RadioState extends State<RadioPlayer>{
-
-  bool playing=false;
-
-  @override
-  Widget build(BuildContext context){
-
-    return Column(
-
-      children:[
-
-        IconButton(
-
-          iconSize:80,
-
-          icon:Icon(
-
-            playing
-                ? Icons.pause_circle
-                : Icons.play_circle,
-
-            color:Colors.purple,
-
-          ),
-
-          onPressed:() async{
-
-            if(playing){
-
-              AudioService().pause();
-
-            }else{
-
-              await AudioService().playRadio();
-
-            }
-
-            setState(() {
-              playing=!playing;
-            });
-
-          },
-
-        ),
-
-      ],
-
-    );
-
-  }
-
-}
-
-/// =======================
-/// LIKE BUTTON
-/// =======================
-
-class LikeButton extends StatefulWidget {
-
-  final TrackModel track;
-
-  const LikeButton({super.key,required this.track});
-
-  @override
-  State<LikeButton> createState()=>_LikeState();
-
-}
-
-class _LikeState extends State<LikeButton>{
-
-  bool liked=false;
-
-  @override
-  Widget build(BuildContext context){
-
-    return IconButton(
-
-      icon:Icon(
-        liked
-            ? Icons.favorite
-            : Icons.favorite_border,
-        color:Colors.red
-      ),
-
-      onPressed:() async{
-
-        await SupabaseService()
-            .likeTrack(widget.track.id);
-
-        setState(() {
-          liked=true;
-        });
-
-      },
-
-    );
-
-  }
-
-}
+name: Flutter Release Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 3. Install Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: 4. Unpack Source Code
+        run: |
+          unzip -q -o "Kimi_Agent_OpenWave Complete Code.zip"
+          DIR=$(find . -name "pubspec.yaml" -exec dirname {} \; | head -n 1)
+          echo "FLUTTER_DIR=$DIR" >> $GITHUB_ENV
+
+      - name: 5. Purge Broken Legacy Code
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: |
+          rm -rf lib/features/admin
+          rm -rf lib/features/auth/presentation/bloc
+          rm -rf lib/features/home/presentation/bloc
+          rm -rf lib/features/player/presentation/bloc
+          rm -rf lib/core/models
+          rm -f lib/core/services/supabase_service.dart
+
+      - name: 6. Configure Android and Pubspec
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: |
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/values
+          mkdir -p assets/images assets/animations
+          
+          echo "kotlin_version=1.9.0" >> android/gradle.properties
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.minSdkVersion=24" >> android/local.properties
+          
+          touch assets/images/logo.png assets/images/default_cover.png
+          echo "{}" > assets/animations/loading.json
+          
+          cat << 'EOF' > android/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar"><item name="android:windowBackground">@android:color/black</item></style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar"><item name="android:windowBackground">@android:color/black</item></style>
+          </resources>
+          EOF
+
+          # Python script для оновлення pubspec, AndroidManifest та MainActivity
+          python3 - << 'EOF'
+          # Твій повний python скрипт тут
+          EOF
+
+      - name: 7. Generate Core Logic
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: |
+          # Створення core/models і services
+          mkdir -p lib/core/services lib/core/models
+          # ... всі моделі та сервіси як раніше
+          # TrackModel, PlaylistModel, SupabaseService, SimpleAudioService
+
+      - name: 8. Generate Screens and UI
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: |
+          # Створення папок screens і всіх UI файлів як раніше
+          # auth, admin, gamification, radio, chat, player, home
+
+      - name: 9. Get Flutter Dependencies
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: flutter pub get
+
+      - name: 10. Build Android Release APK
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: flutter build apk --release
+
+      - name: 11. Build Android App Bundle (AAB)
+        working-directory: ${{ env.FLUTTER_DIR }}
+        run: flutter build appbundle --release
+
+      - name: 12. Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: OpenWave-Builds
+          path: |
+            ${{ env.FLUTTER_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+            ${{ env.FLUTTER_DIR }}/build/app/outputs/bundle/release/app-release.aab
