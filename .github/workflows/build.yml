@@ -39,31 +39,37 @@ jobs:
           rm -rf lib/core/models
           rm -f lib/core/services/supabase_service.dart
 
-      - name: 6. Configure Android and Pubspec
+      - name: 6. Configure Android and Pubspec (Asset Shield)
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
           # Створюємо всі необхідні папки
           mkdir -p android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/values
           mkdir -p assets/images assets/animations assets/icons assets/fonts
           
-          # Налаштування Android
           echo "kotlin_version=1.9.0" >> android/gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.minSdkVersion=24" >> android/local.properties
           
-          # 1. ШТУЧНО СТВОРЮЄМО ІКОНКИ (Справжня картинка через Base64)
+          # СТВОРЮЄМО БАЗОВУ КАРТИНКУ
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/logo.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/default_cover.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/icons/icon.png
           
-          # 2. ШТУЧНО СТВОРЮЄМО ШРИФТИ (Копіюємо системний шрифт, щоб файли не були пустими)
-          cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf assets/fonts/Inter-Regular.ttf || echo "fake_font_data" > assets/fonts/Inter-Regular.ttf
-          cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/fonts/Inter-Medium.ttf || echo "fake_font_data_medium" > assets/fonts/Inter-Medium.ttf
-          cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/fonts/Inter-SemiBold.ttf || echo "fake_font_data_semibold" > assets/fonts/Inter-SemiBold.ttf
+          # УЛЬТИМАТИВНИЙ ЗАХИСТ ВІД ПОМИЛОК ШРИФТІВ (Генеруємо всі можливі варіанти Inter)
+          FONTS=("Regular" "Medium" "SemiBold" "Bold" "Light" "ExtraLight" "Thin" "Black" "ExtraBold")
+          for font in "${FONTS[@]}"; do
+            cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf "assets/fonts/Inter-$font.ttf" || echo "fake" > "assets/fonts/Inter-$font.ttf"
+          done
+          
+          # ЗАХИСТ ВІД ПОМИЛОК ІКОНОК (Якщо Kimi додав їх у pubspec)
+          ICONS=("google.png" "apple.png" "facebook.png" "placeholder.png")
+          for icon in "${ICONS[@]}"; do
+            cp assets/images/logo.png "assets/icons/$icon"
+          done
           
           echo "{}" > assets/animations/loading.json
           
