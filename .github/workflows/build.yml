@@ -206,7 +206,7 @@ jobs:
                 final response = await _c.from('tracks').select().order('created_at', ascending: false);
                 return (response as List).map((e) => TrackModel.fromJson(e as Map<String, dynamic>)).toList(); 
               } catch(e) { 
-                debugPrint('ПОМИЛКА БАЗИ ДАНИХ (RLS): $e');
+                debugPrint('ПОМИЛКА ЧИТАННЯ БАЗИ: $e');
                 return []; 
               } 
             }
@@ -219,33 +219,39 @@ jobs:
               } catch(e) { return false; } 
             }
 
-            Future<bool> uploadNewTrack(String title, String artist, String audioPath, String? imagePath) async {
+            Future<String> uploadNewTrack(String title, String artist, String audioPath, String? imagePath) async {
+              String logs = "ЛОГ ЗАВАНТАЖЕННЯ:\n";
               try {
+                logs += "1. Аудіо...\n";
                 final audioFile = File(audioPath);
                 final audioExt = audioPath.split('.').last;
                 final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
                 await _c.storage.from('tracks').upload(audioName, audioFile);
                 final audioUrl = _c.storage.from('tracks').getPublicUrl(audioName);
+                logs += "✅ Аудіо успішно!\n";
 
                 String? imageUrl;
                 if (imagePath != null) {
+                  logs += "2. Фото...\n";
                   final imgFile = File(imagePath);
                   final imgExt = imagePath.split('.').last;
                   final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}.$imgExt';
                   await _c.storage.from('covers').upload(imgName, imgFile);
                   imageUrl = _c.storage.from('covers').getPublicUrl(imgName);
+                  logs += "✅ Фото успішно!\n";
                 }
 
+                logs += "3. База Даних...\n";
                 await _c.from('tracks').insert({
                   'title': title,
                   'artist': artist,
                   'audio_url': audioUrl,
                   'cover_url': imageUrl
                 });
-                return true;
+                logs += "✅ Текст успішно збережено!\n";
+                return 'ok';
               } catch(e) {
-                debugPrint('Upload Error: $e');
-                return false;
+                return logs + "❌ ПОМИЛКА: $e";
               }
             }
           }
@@ -257,10 +263,12 @@ jobs:
           import 'package:just_audio_background/just_audio_background.dart';
           import 'package:openwave/core/models/track_model.dart';
           import 'package:supabase_flutter/supabase_flutter.dart';
+          
           class SimpleAudioService {
             static final SimpleAudioService _instance = SimpleAudioService._internal();
             factory SimpleAudioService() => _instance;
             SimpleAudioService._internal();
+            
             final AudioPlayer player = AudioPlayer();
             final ValueNotifier<TrackModel?> currentTrack = ValueNotifier(null);
             
@@ -272,12 +280,29 @@ jobs:
                   if (!url.startsWith('http')) {
                     url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
                   }
-                  url = url.trim().replaceAll(' ', '%20');
-                  String art = track.coverUrl ?? 'https://ui-avatars.com/api/?name=${track.title}&background=random';
-                  await player.setAudioSource(AudioSource.uri(Uri.parse(url), tag: MediaItem(id: track.id.toString(), album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse(art))));
+                  
+                  // СУПЕР-ЗАХИСТ ВІД КИРИЛИЦІ ТА ПРОБІЛІВ У ПОСИЛАННЯХ
+                  final safeUrl = Uri.encodeFull(url.trim());
+                  
+                  // Захист обкладинки (якщо там є кирилиця, плеєр міг тихо падати)
+                  String rawArt = track.coverUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(track.title)}&background=random';
+                  final safeArt = Uri.encodeFull(rawArt.trim());
+                  
+                  await player.setAudioSource(AudioSource.uri(
+                    Uri.parse(safeUrl), 
+                    tag: MediaItem(
+                      id: track.id.toString(), 
+                      album: 'OpenWave', 
+                      title: track.title, 
+                      artist: track.artist, 
+                      artUri: Uri.parse(safeArt)
+                    )
+                  ));
                   player.play();
                 }
-              } catch (e) { debugPrint('ERROR: $e'); }
+              } catch (e) { 
+                debugPrint('CRITICAL PLAYER ERROR: $e'); 
+              }
             }
             void togglePlayPause() { player.playing ? player.pause() : player.play(); }
           }
@@ -316,7 +341,7 @@ jobs:
           }
           EOF
           
-          cat << 'EOF'  > lib/features/admin/presentation/screens/admin_screen.dart
+          cat << 'EOF' > lib/features/admin/presentation/screens/admin_screen.dart
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
           import 'package:openwave/core/services/supabase_service.dart';
@@ -336,11 +361,20 @@ jobs:
                   SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: isLoading ? null : () async {
                     if(titleCtrl.text.isEmpty || artistCtrl.text.isEmpty || audioPath == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Заповніть назву, артиста та оберіть аудіо!'), backgroundColor: Colors.red)); return; }
                     setState(()=>isLoading=true); 
-                    bool success = await SupabaseService().uploadNewTrack(titleCtrl.text, artistCtrl.text, audioPath!, imagePath);
+                    String resultMsg = await SupabaseService().uploadNewTrack(titleCtrl.text, artistCtrl.text, audioPath!, imagePath);
                     setState(()=>isLoading=false); 
                     if(!mounted)return;
-                    if(success) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
-                    } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка. Перевірте публічність бакетів у Supabase.'), backgroundColor: Colors.red)); }
+                    
+                    if(resultMsg == 'ok') { 
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
+                    } else { 
+                       showDialog(context: context, builder: (c) => AlertDialog(
+                         backgroundColor: const Color(0xFF282828), 
+                         title: const Text('Деталі помилки', style: TextStyle(color: Colors.white)), 
+                         content: SingleChildScrollView(child: Text(resultMsg, style: const TextStyle(color: Colors.redAccent, fontSize: 14))), 
+                         actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('ЗРОЗУМІЛО', style: TextStyle(color: Color(0xFF1DB954))))]
+                       ));
+                    }
                   }, child: isLoading ? const CircularProgressIndicator(color: Colors.black) : const Text('ЗАВАНТАЖИТИ В БАЗУ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))))
                 ])));
             }
@@ -348,33 +382,35 @@ jobs:
           EOF
 
           cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
-          import 'package:flutter/material.dart'; import 'dart:math';
+          import 'package:flutter/material.dart';
+          import 'dart:math';
           class DailyRewardScreen extends StatefulWidget { const DailyRewardScreen({super.key}); @override State<DailyRewardScreen> createState() => _RewardState(); }
           class _RewardState extends State<DailyRewardScreen> {
             bool claimed = false; int reward = 0;
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Щоденна нагорода', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Daily Reward', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
                 body: RefreshIndicator(onRefresh: () async { await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.2), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.card_giftcard, size: 140, color: claimed ? Colors.grey : const Color(0xFF1DB954)), const SizedBox(height: 30),
-                  Text(claimed ? 'Ви отримали $reward монет!' : 'Ваш подарунок готовий!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
-                  SizedBox(width: 200, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: claimed ? Colors.grey : const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: claimed ? null : () => setState(() { reward = Random().nextInt(50) + 10; claimed = true; }), child: Text(claimed ? 'Приходьте завтра' : 'ВІДКРИТИ', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18))))
+                  Text(claimed ? 'You received $reward coins!' : 'Your gift is ready!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 40),
+                  SizedBox(width: 200, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: claimed ? Colors.grey : const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: claimed ? null : () => setState(() { reward = Random().nextInt(50) + 10; claimed = true; }), child: Text(claimed ? 'Come back tomorrow' : 'OPEN', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18))))
                 ]))])));
             }
           }
           EOF
 
           cat << 'EOF' > lib/features/gamification/presentation/screens/spin_wheel_screen.dart
-          import 'package:flutter/material.dart'; import 'dart:math';
+          import 'package:flutter/material.dart';
+          import 'dart:math';
           class SpinWheelScreen extends StatefulWidget { const SpinWheelScreen({super.key}); @override State<SpinWheelScreen> createState() => _SpinState(); }
           class _SpinState extends State<SpinWheelScreen> with SingleTickerProviderStateMixin {
             late AnimationController ctrl; bool spinning = false;
             @override void initState() { super.initState(); ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4)); }
             @override void dispose() { ctrl.dispose(); super.dispose(); }
             @override Widget build(BuildContext context) {
-              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Колесо Фортуни', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
+              return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Spin Wheel', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
                 body: RefreshIndicator(onRefresh: () async { await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(children: [ SizedBox(height: MediaQuery.of(context).size.height * 0.15), Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  RotationTransition(turns: ctrl, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5), gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Color(0xFF1DB954), Colors.orange, Colors.purple, Colors.red])), child: const Center(child: Text('КРУТИ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35, color: Colors.white))))), const SizedBox(height: 60),
-                  SizedBox(width: 200, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), onPressed: spinning ? null : () { setState(() => spinning = true); ctrl.reset(); ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.easeOutCirc).then((_) { setState(() => spinning = false); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ви виграли супер-приз!', style: TextStyle(fontSize: 18)), backgroundColor: Color(0xFF1DB954))); }); }, child: const Text('КРУТИТИ', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold))))
+                  RotationTransition(turns: ctrl, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5), gradient: const SweepGradient(colors: [Colors.red, Colors.blue, Color(0xFF1DB954), Colors.orange, Colors.purple, Colors.red])), child: const Center(child: Text('SPIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 35, color: Colors.white))))), const SizedBox(height: 60),
+                  SizedBox(width: 200, height: 60, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), onPressed: spinning ? null : () { setState(() => spinning = true); ctrl.reset(); ctrl.animateTo(Random().nextDouble() * 5 + 5, curve: Curves.easeOutCirc).then((_) { setState(() => spinning = false); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You won a super prize!', style: TextStyle(fontSize: 18)), backgroundColor: Colors.green)); }); }, child: const Text('SPIN NOW', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold))))
                 ]))])));
             }
           }
@@ -468,9 +504,18 @@ jobs:
           import 'package:openwave/core/services/simple_audio_service.dart';
           class HomeTab extends StatefulWidget { const HomeTab({super.key}); @override State<HomeTab> createState() => _HomeState(); }
           class _HomeState extends State<HomeTab> {
-            final _sb = SupabaseService(); List<TrackModel> _t = []; bool _l = true;
+            final _sb = SupabaseService(); List<TrackModel> _t = []; bool _l = true; String? _err;
             @override void initState() { super.initState(); load(); }
-            Future<void> load() async { if (!mounted) return; setState(() => _l = true); try { final t = await _sb.getTracks(); if (mounted) setState(() { _t = t; _l = false; }); } catch (e) { if (mounted) setState(() => _l = false); } }
+            Future<void> load() async { 
+              if (!mounted) return; 
+              setState(() { _l = true; _err = null; }); 
+              try { 
+                final t = await _sb.getTracks(); 
+                if (mounted) setState(() { _t = t; _l = false; }); 
+              } catch (e) { 
+                if (mounted) setState(() { _err = e.toString(); _l = false; }); 
+              } 
+            }
             
             String greeting() { var hour = DateTime.now().hour; if (hour < 12) return 'Доброго ранку'; if (hour < 18) return 'Доброго дня'; return 'Доброго вечора'; }
 
@@ -478,7 +523,8 @@ jobs:
               return Scaffold(backgroundColor: Colors.black, body: RefreshIndicator(onRefresh: load, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: ListView(padding: EdgeInsets.zero, physics: const AlwaysScrollableScrollPhysics(), children: [
                 Container(padding: const EdgeInsets.fromLTRB(16, 60, 16, 20), decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [const Color(0xFF1DB954).withOpacity(0.4), Colors.black])), child: Text(greeting(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white))),
                 if (_l) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: Color(0xFF1DB954)))) 
-                else if (_t.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('База пуста.\n\nЯкщо ви щойно завантажили трек, зайдіть в Supabase -> Authentication -> Policies та ВИМКНІТЬ RLS для таблиці "tracks"!', textAlign: TextAlign.center, style: TextStyle(color: Colors.redAccent, fontSize: 16))) 
+                else if (_err != null) Padding(padding: const EdgeInsets.all(20), child: Text('ПОМИЛКА БАЗИ ДАНИХ:\n$_err\n\nМожливо, відсутня таблиця "tracks" або заважає RLS політика.', style: const TextStyle(color: Colors.redAccent, fontSize: 14)))
+                else if (_t.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('База пуста або немає прав на читання. Виконайте SQL скрипт у Supabase!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 16))) 
                 else ...[
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Text('Нові релізи', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
                   SizedBox(height: 160, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), itemCount: _t.length > 5 ? 5 : _t.length, itemBuilder: (c, i) {
@@ -514,7 +560,7 @@ jobs:
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: Text('profile'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: Colors.black, actions: [IconButton(icon: const Icon(Icons.logout, color: Colors.grey), onPressed: () => Supabase.instance.client.auth.signOut())]),
                 body: RefreshIndicator(onRefresh: () async { setState((){}); await Future.delayed(const Duration(seconds: 1)); }, color: const Color(0xFF1DB954), child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
                   const Center(child: CircleAvatar(radius: 50, backgroundColor: Color(0xFF282828), child: Icon(Icons.person, size: 50, color: Color(0xFF1DB954)))), const SizedBox(height: 20), Center(child: Text(u?.email ?? 'Користувач', style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold))), const SizedBox(height: 40),
-                  buildCard(context, Icons.card_giftcard, 'Щоденна Нагорода', Colors.orange, const DailyRewardScreen()), buildCard(context, Icons.casino, 'Колесо Фортуни', Colors.pink, const SpinWheelScreen()), buildCard(context, Icons.radio, 'radio'.tr(), Colors.blue, const RadioScreen()), buildCard(context, Icons.chat, 'chat'.tr(), Colors.teal, const ChatListScreen()), const Divider(color: Color(0xFF282828), height: 40, thickness: 1),
+                  buildCard(context, Icons.card_giftcard, 'Daily Reward', Colors.orange, const DailyRewardScreen()), buildCard(context, Icons.casino, 'Spin Wheel', Colors.pink, const SpinWheelScreen()), buildCard(context, Icons.radio, 'radio'.tr(), Colors.blue, const RadioScreen()), buildCard(context, Icons.chat, 'chat'.tr(), Colors.teal, const ChatListScreen()), const Divider(color: Color(0xFF282828), height: 40, thickness: 1),
                   FutureBuilder<bool>(future: SupabaseService().isAdmin(), builder: (c, s) { if (s.data == true) return ListTile(leading: const Icon(Icons.cloud_upload, color: Color(0xFF1DB954)), title: const Text('Завантажити Трек (Адмін)', style: TextStyle(color: Color(0xFF1DB954), fontWeight: FontWeight.bold)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()))); return const SizedBox.shrink(); }),
                   const Divider(color: Color(0xFF282828), height: 40, thickness: 1),
                   ListTile(leading: const Icon(Icons.language, color: Colors.white), title: const Text('Вибір мови / Change Language', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), onTap: () {
@@ -566,7 +612,7 @@ jobs:
             await EasyLocalization.ensureInitialized();
             try { await Supabase.initialize(url: 'https://nmowlkjoragnffkxbrzq.supabase.co', anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYyNjcsImV4cCI6MjA4ODY3MjI2N30.yNHTyZfXOjy-lJNxCOm8F9_YVGWF6kGWmueFYBHTfI0'); } catch (e) {}
             try { await JustAudioBackground.init(androidNotificationChannelId: 'com.openwave.app.audio', androidNotificationChannelName: 'Audio playback', androidNotificationOngoing: true); } catch (e) {}
-            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('System Error:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
+            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Критична помилка:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
             runApp(EasyLocalization(
               supportedLocales: const [Locale('uk'), Locale('en'), Locale('pl'), Locale('es'), Locale('de'), Locale('fr'), Locale('cs'), Locale('ru')],
               path: 'assets/translations',
