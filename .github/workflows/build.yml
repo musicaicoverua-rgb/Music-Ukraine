@@ -60,8 +60,9 @@ jobs:
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/images/default_cover.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png assets/icons/icon.png
           
-          # 2. ШТУЧНО СТВОРЮЄМО ШРИФТ (Копіюємо системний шрифт, щоб файл не був пустим)
+          # 2. ШТУЧНО СТВОРЮЄМО ШРИФТИ (Копіюємо системний шрифт, щоб файли не були пустими)
           cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf assets/fonts/Inter-Regular.ttf || echo "fake_font_data" > assets/fonts/Inter-Regular.ttf
+          cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/fonts/Inter-Medium.ttf || echo "fake_font_data_medium" > assets/fonts/Inter-Medium.ttf
           
           echo "{}" > assets/animations/loading.json
           
@@ -268,7 +269,7 @@ jobs:
           import 'package:flutter/material.dart';
           import 'dart:math';
           class DailyRewardScreen extends StatefulWidget { const DailyRewardScreen({super.key}); @override State<DailyRewardScreen> createState() => _RewardState(); }
-          class _RewardState extends State<DailyRewardScreen> {
+          class _RewardState extends State<DailyRewardScreen>  {
             bool claimed = false; int reward = 0;
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Daily Reward', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)),
@@ -368,6 +369,8 @@ jobs:
                     return Column(children: [SliderTheme(data: SliderThemeData(activeTrackColor: const Color(0xFF6C63FF), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)), child: Slider(value: m > 0 ? v : 0, max: m > 0 ? m : 1, onChanged: (nv) => p.seek(Duration(seconds: nv.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(fmt(pos), style: const TextStyle(color: Colors.grey)), Text(fmt(dur), style: const TextStyle(color: Colors.grey))])]);
                   });}), const SizedBox(height: 20),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                    IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: (){}),
+                    StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF6C63FF)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
                     IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: (){}),
                     StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF6C63FF)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
                     IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: (){})
