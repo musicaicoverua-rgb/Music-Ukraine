@@ -207,6 +207,7 @@ jobs:
           
           class SupabaseService {
             final _c = Supabase.instance.client;
+            String? get currentUserId => _c.auth.currentUser?.id;
             
             Future<List<TrackModel>> getTracks() async { 
               try { 
@@ -217,73 +218,69 @@ jobs:
             
             Future<bool> isAdmin() async { 
               try { 
-                final u = _c.auth.currentUser; if (u == null) return false; 
-                final res = await _c.from('profiles').select('is_admin').eq('id', u.id).maybeSingle(); 
+                if (currentUserId == null) return false; 
+                final res = await _c.from('profiles').select('is_admin').eq('id', currentUserId!).maybeSingle(); 
                 return res != null && res['is_admin'] == true; 
               } catch(e) { return false; } 
             }
 
-            // РЕДАГУВАННЯ ТРЕКУ
             Future<bool> editTrack(String id, String newTitle, String newArtist) async {
-              try {
-                await _c.from('tracks').update({'title': newTitle, 'artist': newArtist}).eq('id', id);
-                return true;
-              } catch(e) { return false; }
+              try { await _c.from('tracks').update({'title': newTitle, 'artist': newArtist}).eq('id', id); return true; } catch(e) { return false; }
             }
 
-            // ВИДАЛЕННЯ ТРЕКУ
             Future<bool> deleteTrack(String id) async {
-              try {
-                await _c.from('tracks').delete().eq('id', id);
-                return true;
-              } catch(e) { return false; }
+              try { await _c.from('tracks').delete().eq('id', id); return true; } catch(e) { return false; }
             }
             
-            // ПЛЕЙЛИСТИ
             Future<List<PlaylistModel>> getPlaylists() async {
-              try {
-                final res = await _c.from('playlists').select().order('created_at', ascending: false);
-                return (res as List).map((e) => PlaylistModel.fromJson(e)).toList();
-              } catch(e) { return []; }
+              try { final res = await _c.from('playlists').select().order('created_at', ascending: false); return (res as List).map((e) => PlaylistModel.fromJson(e)).toList(); } catch(e) { return []; }
             }
-            
             Future<bool> createPlaylist(String name) async {
               try { await _c.from('playlists').insert({'name': name}); return true; } catch(e) { return false; }
             }
+            Future<bool> addTrackToPlaylist(String playlistId, String trackId) async {
+              try { await _c.from('playlist_tracks').insert({'playlist_id': playlistId, 'track_id': trackId}); return true; } catch(e) { return false; }
+            }
             
-            // АНАЛІТИКА
-            Future<Map<String, int>> getAnalytics() async {
+            Future<bool> toggleFavorite(String trackId, bool isFav) async {
+              if (currentUserId == null) return false;
+              try {
+                if (isFav) { await _c.from('favorites').delete().eq('user_id', currentUserId!).eq('track_id', trackId); } 
+                else { await _c.from('favorites').insert({'user_id': currentUserId, 'track_id': trackId}); }
+                return true;
+              } catch(e) { return false; }
+            }
+            Future<bool> isFavorite(String trackId) async {
+              if (currentUserId == null) return false;
+              try { final r = await _c.from('favorites').select().eq('user_id', currentUserId!).eq('track_id', trackId).maybeSingle(); return r != null; } catch(e) { return false; }
+            }
+            Future<List<TrackModel>> getFavoriteTracks() async {
+               if (currentUserId == null) return [];
                try {
-                 final tr = await _c.from('tracks').select('id');
-                 final pl = await _c.from('playlists').select('id');
-                 return {'tracks': tr.length, 'playlists': pl.length};
-               } catch(e) { return {'tracks': 0, 'playlists': 0}; }
+                 final favs = await _c.from('favorites').select('track_id').eq('user_id', currentUserId!);
+                 if ((favs as List).isEmpty) return [];
+                 final ids = favs.map((e) => e['track_id']).toList();
+                 final res = await _c.from('tracks').select().inFilter('id', ids);
+                 return (res as List).map((e) => TrackModel.fromJson(e)).toList();
+               } catch(e) { return []; }
+            }
+            
+            Future<Map<String, int>> getAnalytics() async {
+               try { final tr = await _c.from('tracks').select('id'); final pl = await _c.from('playlists').select('id'); return {'tracks': tr.length, 'playlists': pl.length}; } catch(e) { return {'tracks': 0, 'playlists': 0}; }
             }
 
             Future<String> uploadNewTrack(String title, String artist, String audioPath, String? imagePath) async {
               try {
-                final audioFile = File(audioPath);
-                final audioExt = audioPath.split('.').last;
-                final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
+                final audioFile = File(audioPath); final audioExt = audioPath.split('.').last; final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
                 await _c.storage.from('tracks').upload(audioName, audioFile);
                 final audioUrl = _c.storage.from('tracks').getPublicUrl(audioName);
-
                 String? imageUrl;
                 if (imagePath != null) {
-                  final imgFile = File(imagePath);
-                  final imgExt = imagePath.split('.').last;
-                  final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}.$imgExt';
+                  final imgFile = File(imagePath); final imgExt = imagePath.split('.').last; final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}.$imgExt';
                   await _c.storage.from('covers').upload(imgName, imgFile);
                   imageUrl = _c.storage.from('covers').getPublicUrl(imgName);
                 }
-
-                await _c.from('tracks').insert({
-                  'title': title,
-                  'artist': artist,
-                  'audio_url': audioUrl,
-                  'file_path': audioUrl,
-                  'cover_url': imageUrl
-                });
+                await _c.from('tracks').insert({'title': title, 'artist': artist, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': imageUrl});
                 return 'ok';
               } catch(e) { return "❌ ПОМИЛКА БАЗИ:\n$e"; }
             }
@@ -296,34 +293,79 @@ jobs:
           import 'package:just_audio_background/just_audio_background.dart';
           import 'package:openwave/core/models/track_model.dart';
           import 'package:supabase_flutter/supabase_flutter.dart';
+          
           class SimpleAudioService {
             static final SimpleAudioService _instance = SimpleAudioService._internal();
             factory SimpleAudioService() => _instance;
-            SimpleAudioService._internal();
+            
             final AudioPlayer player = AudioPlayer();
             final ValueNotifier<TrackModel?> currentTrack = ValueNotifier(null);
+            List<TrackModel> currentQueue = [];
             
-            Future<void> playTrack(TrackModel track) async {
-              currentTrack.value = track;
-              try {
-                String url = track.audioUrl ?? '';
-                if (url.isNotEmpty) {
-                  if (!url.startsWith('http')) {
-                    url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
+            SimpleAudioService._internal() {
+               // АВТОМАТИЧНЕ ПЕРЕМИКАННЯ (Коли пісня дограє, just_audio сам перемикає, а ми оновлюємо UI)
+               player.currentIndexStream.listen((index) {
+                  if (index != null && index < currentQueue.length) {
+                     currentTrack.value = currentQueue[index];
                   }
-                  final safeUrl = Uri.encodeFull(url.trim());
-                  String rawArt = track.coverUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(track.title)}&background=random';
-                  final safeArt = Uri.encodeFull(rawArt.trim());
-                  
-                  await player.setAudioSource(AudioSource.uri(
-                    Uri.parse(safeUrl), 
-                    tag: MediaItem(id: track.id.toString(), album: 'OpenWave', title: track.title, artist: track.artist, artUri: Uri.parse(safeArt))
-                  ));
-                  player.play();
-                }
-              } catch (e) { debugPrint('ERROR: $e'); }
+               });
             }
+            
+            Future<void> playQueue(List<TrackModel> tracks, {int initialIndex = 0}) async {
+              if(tracks.isEmpty) return;
+              currentQueue = tracks;
+              currentTrack.value = tracks[initialIndex];
+              
+              try {
+                final playlist = ConcatenatingAudioSource(
+                  useLazyPreparation: true,
+                  children: tracks.map((t) {
+                    String url = t.audioUrl ?? '';
+                    if (!url.startsWith('http')) url = Supabase.instance.client.storage.from('tracks').getPublicUrl(url);
+                    final safeUrl = Uri.encodeFull(url.trim());
+                    String rawArt = t.coverUrl ?? 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(t.title)}&background=random';
+                    final safeArt = Uri.encodeFull(rawArt.trim());
+                    
+                    return AudioSource.uri(
+                      Uri.parse(safeUrl), 
+                      tag: MediaItem(id: t.id.toString(), album: 'OpenWave', title: t.title, artist: t.artist, artUri: Uri.parse(safeArt))
+                    );
+                  }).toList(),
+                );
+                
+                // РЕЖИМ ЗА ЗАМОВЧУВАННЯМ: Плеєр автоматично йде по списку і повторює його весь
+                await player.setLoopMode(LoopMode.all);
+                
+                await player.setAudioSource(playlist, initialIndex: initialIndex, initialPosition: Duration.zero);
+                player.play();
+              } catch (e) { debugPrint('PLAYER ERROR: $e'); }
+            }
+            
             void togglePlayPause() { player.playing ? player.pause() : player.play(); }
+            
+            // ВПЕРЕД / НАЗАД
+            void next() { 
+              if(player.hasNext) { player.seekToNext(); } 
+              else { player.seek(Duration.zero, index: 0); } // Зациклення
+            }
+            void prev() { 
+              if(player.hasPrevious) { player.seekToPrevious(); } 
+              else { player.seek(Duration.zero, index: currentQueue.length - 1); }
+            }
+            
+            // SHUFFLE (Випадковий порядок)
+            void toggleShuffle() async {
+               final enable = !player.shuffleModeEnabled;
+               await player.setShuffleModeEnabled(enable);
+            }
+            
+            // ПОВТОРЕННЯ (Loop)
+            void toggleLoop() async {
+               final mode = player.loopMode;
+               if (mode == LoopMode.off) { await player.setLoopMode(LoopMode.all); }
+               else if (mode == LoopMode.all) { await player.setLoopMode(LoopMode.one); }
+               else { await player.setLoopMode(LoopMode.off); }
+            }
           }
           EOF
 
@@ -383,7 +425,6 @@ jobs:
                     String resultMsg = await SupabaseService().uploadNewTrack(titleCtrl.text, artistCtrl.text, audioPath!, imagePath);
                     setState(()=>isLoading=false); 
                     if(!mounted)return;
-                    
                     if(resultMsg == 'ok') { 
                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трек успішно завантажено! Зробіть свайп вниз на Головній для оновлення.'), backgroundColor: Colors.green)); Navigator.pop(context);
                     } else { 
@@ -451,6 +492,11 @@ jobs:
           }
           EOF
 
+          cat << 'EOF' > lib/features/gamification/presentation/screens/achievements_screen.dart
+          import 'package:flutter/material.dart';
+          class AchievementsScreen extends StatelessWidget { const AchievementsScreen({super.key}); @override Widget build(BuildContext context) { return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Achievements', style: TextStyle(color: Colors.white)), backgroundColor: Colors.black, iconTheme: const IconThemeData(color: Colors.white)), body: ListView(padding: const EdgeInsets.all(16), children: [_b(Icons.headphones, 'Listener', 'Listen to 10 tracks', true), _b(Icons.playlist_add_check, 'Curator', 'Create your first playlist', true), _b(Icons.star, 'Super Fan', 'Get 1000 points', false), _b(Icons.radio, 'Night DJ', 'Listen to radio at night', false)])); } Widget _b(IconData i, String t, String d, bool u) { return Card(color: u ? const Color(0xFF1E1E2C) : Colors.white10, margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: Icon(i, color: u ? Colors.amber : Colors.grey, size: 40), title: Text(t, style: TextStyle(color: u ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)), subtitle: Text(d, style: TextStyle(color: Colors.grey)), trailing: u ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.lock, color: Colors.grey))); } }
+          EOF
+
           cat << 'EOF' > lib/features/radio/presentation/screens/radio_screen.dart
           import 'package:flutter/material.dart';
           import 'package:openwave/core/services/supabase_service.dart';
@@ -467,7 +513,7 @@ jobs:
                   AnimatedContainer(duration: const Duration(milliseconds: 500), width: isPlaying ? 230 : 200, height: isPlaying ? 230 : 200, decoration: BoxDecoration(shape: BoxShape.circle, color: isPlaying ? const Color(0xFF1DB954) : const Color(0xFF282828), boxShadow: isPlaying ? [BoxShadow(color: const Color(0xFF1DB954).withOpacity(0.6), blurRadius: 40, spreadRadius: 20)] : []), child: const Center(child: Icon(Icons.radio, size: 80, color: Colors.white))), const SizedBox(height: 50),
                   Text(isPlaying ? '🔴 LIVE ЕФІР' : 'ОФЛАЙН', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isPlaying ? Colors.white : Colors.grey, letterSpacing: 2)), const SizedBox(height: 10),
                   Text(isPlaying ? 'Підключено до потоку...' : 'Натисніть Play', style: const TextStyle(color: Colors.grey)), const SizedBox(height: 50),
-                  IconButton(iconSize: 80, icon: Icon(isPlaying ? Icons.stop_circle : Icons.play_circle_fill, color: isPlaying ? Colors.white : const Color(0xFF1DB954)), onPressed: () { setState(() => isPlaying = !isPlaying); if(isPlaying) { SimpleAudioService().playTrack(radioTrack); } else { SimpleAudioService().player.stop(); } })
+                  IconButton(iconSize: 80, icon: Icon(isPlaying ? Icons.stop_circle : Icons.play_circle_fill, color: isPlaying ? Colors.white : const Color(0xFF1DB954)), onPressed: () { setState(() => isPlaying = !isPlaying); if(isPlaying) { SimpleAudioService().playQueue([radioTrack]); } else { SimpleAudioService().player.stop(); } })
                 ]))])));
             }
           }
@@ -499,28 +545,65 @@ jobs:
 
           cat << 'EOF' > lib/features/player/presentation/screens/full_player_screen.dart
           import 'package:flutter/material.dart';
+          import 'package:just_audio/just_audio.dart';
           import 'package:openwave/core/models/track_model.dart';
+          import 'package:openwave/core/models/playlist_model.dart';
           import 'package:openwave/core/services/simple_audio_service.dart';
-          class FullPlayerScreen extends StatelessWidget {
-            final TrackModel track; const FullPlayerScreen({super.key, required this.track});
+          import 'package:openwave/core/services/supabase_service.dart';
+          class FullPlayerScreen extends StatefulWidget { const FullPlayerScreen({super.key}); @override State<FullPlayerScreen> createState() => _FPState(); }
+          class _FPState extends State<FullPlayerScreen> {
+            bool isFav = false; bool isAdmin = false; List<PlaylistModel> _pl = [];
+            @override void initState() { super.initState(); _chk(); }
+            void _chk() async { 
+              final t = SimpleAudioService().currentTrack.value; if(t==null) return;
+              final s = SupabaseService();
+              final f = await s.isFavorite(t.id); final a = await s.isAdmin();
+              if(a) _pl = await s.getPlaylists();
+              if(mounted) setState((){ isFav = f; isAdmin = a; });
+            }
+            void _tog() async { 
+              final t = SimpleAudioService().currentTrack.value; if(t==null) return;
+              setState(() => isFav = !isFav); 
+              await SupabaseService().toggleFavorite(t.id, !isFav); 
+            }
+            void _addPl() {
+              if(_pl.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Спочатку створіть плейлист в Бібліотеці'))); return; }
+              showModalBottomSheet(context: context, backgroundColor: const Color(0xFF282828), builder: (c) => ListView(shrinkWrap: true, children: _pl.map((p) => ListTile(title: Text(p.name, style: const TextStyle(color: Colors.white)), onTap: () async { await SupabaseService().addTrackToPlaylist(p.id, SimpleAudioService().currentTrack.value!.id); Navigator.pop(c); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Додано в ${p.name}', style: const TextStyle(color: Colors.green)))); })).toList()));
+            }
+            void _q() {
+              final sq = SimpleAudioService().currentQueue;
+              showModalBottomSheet(context: context, backgroundColor: const Color(0xFF121212), builder: (c) => ListView.builder(itemCount: sq.length, itemBuilder: (cc, i) {
+                final t = sq[i]; return ListTile(title: Text(t.title, style: const TextStyle(color: Colors.white)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey)), onTap: () { SimpleAudioService().player.seek(Duration.zero, index: i); Navigator.pop(c); });
+              }));
+            }
             String fmt(Duration? d) { if (d == null) return '0:00'; return '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}'; }
+            
             @override Widget build(BuildContext context) {
               final p = SimpleAudioService().player;
-              return Scaffold(backgroundColor: const Color(0xFF121212), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32), onPressed: () => Navigator.pop(context))),
-                body: Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Container(width: MediaQuery.of(context).size.width * 0.8, height: MediaQuery.of(context).size.width * 0.8, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 40, spreadRadius: 10)], image: track.coverUrl != null ? DecorationImage(image: NetworkImage(track.coverUrl!), fit: BoxFit.cover) : null), child: track.coverUrl == null ? const Icon(Icons.music_note, size: 120, color: Color(0xFF1DB954)) : null), const SizedBox(height: 50),
-                  Align(alignment: Alignment.centerLeft, child: Text(track.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1)), const SizedBox(height: 8), Align(alignment: Alignment.centerLeft, child: Text(track.artist, style: const TextStyle(fontSize: 18, color: Colors.grey), maxLines: 1)), const SizedBox(height: 30),
-                  StreamBuilder<Duration?>(stream: p.positionStream, builder: (c, posS) { return StreamBuilder<Duration?>(stream: p.durationStream, builder: (c, durS) {
-                    final pos = posS.data ?? Duration.zero; final dur = durS.data ?? Duration.zero;
-                    double v = pos.inSeconds.toDouble(); double m = dur.inSeconds.toDouble(); if (v > m) v = m;
-                    return Column(children: [SliderTheme(data: SliderThemeData(activeTrackColor: Colors.white, inactiveTrackColor: Colors.grey.withOpacity(0.3), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)), child: Slider(value: m > 0 ? v : 0, max: m > 0 ? m : 1, onChanged: (nv) => p.seek(Duration(seconds: nv.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(fmt(pos), style: const TextStyle(color: Colors.grey, fontSize: 12)), Text(fmt(dur), style: const TextStyle(color: Colors.grey, fontSize: 12))])]);
-                  });}), const SizedBox(height: 20),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                    IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: (){}),
-                    StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.black, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
-                    IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: (){})
-                  ])
-                ])));
+              return Scaffold(backgroundColor: const Color(0xFF121212), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 32), onPressed: () => Navigator.pop(context)), actions: [if(isAdmin) IconButton(icon: const Icon(Icons.playlist_add, color: Colors.white), onPressed: _addPl)]),
+                body: ValueListenableBuilder<TrackModel?>(valueListenable: SimpleAudioService().currentTrack, builder: (c, track, ch) {
+                  if (track == null) return const SizedBox();
+                  return Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Container(width: MediaQuery.of(context).size.width * 0.8, height: MediaQuery.of(context).size.width * 0.8, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 40, spreadRadius: 10)], image: track.coverUrl != null ? DecorationImage(image: NetworkImage(track.coverUrl!), fit: BoxFit.cover) : null), child: track.coverUrl == null ? const Icon(Icons.music_note, size: 120, color: Color(0xFF1DB954)) : null), const SizedBox(height: 50),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(track.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white), maxLines: 1), const SizedBox(height: 4), Text(track.artist, style: const TextStyle(fontSize: 18, color: Colors.grey), maxLines: 1)])),
+                      IconButton(icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: isFav ? const Color(0xFF1DB954) : Colors.white, size: 32), onPressed: _tog)
+                    ]), const SizedBox(height: 30),
+                    StreamBuilder<Duration?>(stream: p.positionStream, builder: (c, posS) { return StreamBuilder<Duration?>(stream: p.durationStream, builder: (c, durS) {
+                      final pos = posS.data ?? Duration.zero; final dur = durS.data ?? Duration.zero;
+                      double v = pos.inSeconds.toDouble(); double m = dur.inSeconds.toDouble(); if (v > m) v = m;
+                      return Column(children: [SliderTheme(data: SliderThemeData(activeTrackColor: Colors.white, inactiveTrackColor: Colors.grey.withOpacity(0.3), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6)), child: Slider(value: m > 0 ? v : 0, max: m > 0 ? m : 1, onChanged: (nv) => p.seek(Duration(seconds: nv.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(fmt(pos), style: const TextStyle(color: Colors.grey, fontSize: 12)), Text(fmt(dur), style: const TextStyle(color: Colors.grey, fontSize: 12))])]);
+                    });}), const SizedBox(height: 20),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                      StreamBuilder<bool>(stream: p.shuffleModeEnabledStream, builder: (c, s) { final isShuf = s.data ?? false; return IconButton(icon: Icon(Icons.shuffle, color: isShuf ? const Color(0xFF1DB954) : Colors.grey, size: 28), onPressed: () => SimpleAudioService().toggleShuffle()); }),
+                      IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: () => SimpleAudioService().prev()),
+                      StreamBuilder<bool>(stream: p.playingStream, builder: (c, s) { final isP = s.data ?? false; return Container(decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1DB954)), child: IconButton(icon: Icon(isP ? Icons.pause : Icons.play_arrow, color: Colors.black, size: 50), onPressed: () => SimpleAudioService().togglePlayPause())); }),
+                      IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: () => SimpleAudioService().next()),
+                      StreamBuilder<LoopMode>(stream: p.loopModeStream, builder: (c, s) { final mode = s.data ?? LoopMode.all; return IconButton(icon: Icon(mode == LoopMode.one ? Icons.repeat_one : Icons.repeat, color: mode == LoopMode.off ? Colors.grey : const Color(0xFF1DB954), size: 28), onPressed: () => SimpleAudioService().toggleLoop()); })
+                    ]), const SizedBox(height: 20),
+                    Align(alignment: Alignment.centerRight, child: IconButton(icon: const Icon(Icons.queue_music, color: Colors.grey, size: 30), onPressed: _q))
+                  ]));
+                }));
             }
           }
           EOF
@@ -529,21 +612,29 @@ jobs:
           import 'package:flutter/material.dart';
           import 'package:openwave/core/services/supabase_service.dart';
           import 'package:openwave/core/models/playlist_model.dart';
+          import 'package:openwave/core/models/track_model.dart';
+          import 'package:openwave/core/services/simple_audio_service.dart';
           class LibraryTab extends StatefulWidget { const LibraryTab({super.key}); @override State<LibraryTab> createState() => _LState(); }
           class _LState extends State<LibraryTab> {
-            bool _isAdmin = false; List<PlaylistModel> _p = []; bool _l = true;
+            bool _isAdmin = false; List<PlaylistModel> _p = []; List<TrackModel> _f = []; bool _l = true;
             @override void initState() { super.initState(); _ld(); }
-            void _ld() async { final s = SupabaseService(); final a = await s.isAdmin(); final p = await s.getPlaylists(); if(mounted) setState((){ _isAdmin = a; _p = p; _l = false; }); }
+            void _ld() async { final s = SupabaseService(); final a = await s.isAdmin(); final p = await s.getPlaylists(); final f = await s.getFavoriteTracks(); if(mounted) setState((){ _isAdmin = a; _p = p; _f = f; _l = false; }); }
             void _add() {
               final c = TextEditingController();
               showDialog(context: context, builder: (_) => AlertDialog(backgroundColor: const Color(0xFF282828), title: const Text('Новий плейлист', style: TextStyle(color: Colors.white)), content: TextField(controller: c, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Назва', hintStyle: TextStyle(color: Colors.grey))), actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('Відміна', style: TextStyle(color: Colors.grey))), TextButton(onPressed: () async { await SupabaseService().createPlaylist(c.text); Navigator.pop(context); _ld(); }, child: const Text('Створити', style: TextStyle(color: Color(0xFF1DB954))))]));
             }
+            void _pf() {
+              if(_f.isEmpty) return;
+              SimpleAudioService().playQueue(_f);
+            }
             @override Widget build(BuildContext context) {
               return Scaffold(backgroundColor: Colors.black, appBar: AppBar(title: const Text('Бібліотека', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), backgroundColor: Colors.black, automaticallyImplyLeading: false),
                 floatingActionButton: _isAdmin ? FloatingActionButton(backgroundColor: const Color(0xFF1DB954), onPressed: _add, child: const Icon(Icons.add, color: Colors.black)) : null,
-                body: RefreshIndicator(onRefresh: () async { _ld(); }, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: _l ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))) : _p.isEmpty ? ListView(children: const [SizedBox(height: 200), Center(child: Text('Плейлістів ще немає', style: TextStyle(color: Colors.grey)))]) : ListView.builder(padding: const EdgeInsets.all(16), itemCount: _p.length, itemBuilder: (c, i) {
-                  return Card(color: const Color(0xFF121212), child: ListTile(leading: const Icon(Icons.playlist_play, color: Color(0xFF1DB954), size: 40), title: Text(_p[i].name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), subtitle: const Text('0 треків', style: TextStyle(color: Colors.grey))));
-                }))
+                body: RefreshIndicator(onRefresh: () async { _ld(); }, color: const Color(0xFF1DB954), backgroundColor: const Color(0xFF282828), child: _l ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))) : ListView(padding: const EdgeInsets.all(16), physics: const AlwaysScrollableScrollPhysics(), children: [
+                  GestureDetector(onTap: _pf, child: Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF450af5), Color(0xFF8e8ee5)]), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.favorite, color: Colors.white, size: 40), const SizedBox(width: 20), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Улюблені треки', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)), Text('${_f.length} треків', style: const TextStyle(color: Colors.white70))])]))),
+                  const SizedBox(height: 20), const Text('Плейлисти', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 10),
+                  ..._p.map((pl) => Card(color: const Color(0xFF121212), child: ListTile(leading: const Icon(Icons.playlist_play, color: Color(0xFF1DB954), size: 40), title: Text(pl.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))))).toList()
+                ]))
               );
             }
           }
@@ -585,14 +676,14 @@ jobs:
                 else ...[
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: Text('Нові релізи', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
                   SizedBox(height: 160, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), itemCount: _t.length > 5 ? 5 : _t.length, itemBuilder: (c, i) {
-                    final track = _t[i]; return GestureDetector(onTap: () => SimpleAudioService().playTrack(track), child: Container(width: 120, margin: const EdgeInsets.symmetric(horizontal: 4), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    final track = _t[i]; return GestureDetector(onTap: () => SimpleAudioService().playQueue(_t, initialIndex: i), child: Container(width: 120, margin: const EdgeInsets.symmetric(horizontal: 4), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       ClipRRect(borderRadius: BorderRadius.circular(8), child: track.coverUrl != null ? Image.network(track.coverUrl!, width: 120, height: 120, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 120, height: 120, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954), size: 40))) : Container(width: 120, height: 120, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954), size: 40))),
                       const SizedBox(height: 8), Text(track.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)
                     ])));
                   })),
                   const Padding(padding: EdgeInsets.fromLTRB(16, 24, 16, 8), child: Text('Всі треки', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white))),
                   ListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: _t.length, itemBuilder: (c, i) {
-                    final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8)), child: ListTile(contentPadding: const EdgeInsets.all(8), leading: t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 55, height: 55, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 55, height: 55, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))))) : Container(width: 55, height: 55, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 14)), trailing: _isAdmin ? PopupMenuButton(icon: const Icon(Icons.more_vert, color: Colors.grey), color: const Color(0xFF282828), itemBuilder: (c)=>[const PopupMenuItem(value: 'e', child: Text('Редагувати', style: TextStyle(color: Colors.white))), const PopupMenuItem(value: 'd', child: Text('Видалити', style: TextStyle(color: Colors.red)))], onSelected: (v){ if(v=='e')_edit(t); else if(v=='d')_del(t.id); }) : const Icon(Icons.play_arrow, color: Colors.grey), onTap: () => SimpleAudioService().playTrack(t)));
+                    final t = _t[i]; return Container(margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8)), child: ListTile(contentPadding: const EdgeInsets.all(8), leading: t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 55, height: 55, fit: BoxFit.cover, errorBuilder: (c,e,s)=>Container(width: 55, height: 55, color: const Color(0xFF282828), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))))) : Container(width: 55, height: 55, decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(4)), child: const Icon(Icons.music_note, color: Color(0xFF1DB954))), title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)), subtitle: Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 14)), trailing: _isAdmin ? PopupMenuButton(icon: const Icon(Icons.more_vert, color: Colors.grey), color: const Color(0xFF282828), itemBuilder: (c)=>[const PopupMenuItem(value: 'e', child: Text('Редагувати', style: TextStyle(color: Colors.white))), const PopupMenuItem(value: 'd', child: Text('Видалити', style: TextStyle(color: Colors.red)))], onSelected: (v){ if(v=='e')_edit(t); else if(v=='d')_del(t.id); }) : const Icon(Icons.play_arrow, color: Colors.grey), onTap: () => SimpleAudioService().playQueue(_t, initialIndex: i)));
                   })
                 ]
               ])));
@@ -648,9 +739,12 @@ jobs:
                 Positioned.fill(child: IndexedStack(index: idx, children: pages)),
                 Positioned(bottom: 0, left: 0, right: 0, child: ValueListenableBuilder<TrackModel?>(valueListenable: SimpleAudioService().currentTrack, builder: (c, t, ch) {
                   if (t == null) return const SizedBox.shrink();
-                  return GestureDetector(onTap: () { showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => FullPlayerScreen(track: t)); }, child: Container(height: 65, margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
+                  return GestureDetector(onTap: () { showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => const FullPlayerScreen()); }, child: Container(height: 65, margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF282828), borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
                      t.coverUrl != null ? ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(t.coverUrl!, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (c,e,s)=>const Icon(Icons.music_note, color: Colors.white))) : const Icon(Icons.music_note, color: Colors.white), 
-                     const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(t.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1), Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1)])), StreamBuilder<bool>(stream: SimpleAudioService().player.playingStream, builder: (c, s) { final p = s.data ?? false; return IconButton(icon: Icon(p ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 30), onPressed: () => SimpleAudioService().togglePlayPause()); }) ])));
+                     const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(t.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1), Text(t.artist, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1)])), 
+                     StreamBuilder<bool>(stream: SimpleAudioService().player.playingStream, builder: (c, s) { final p = s.data ?? false; return IconButton(icon: Icon(p ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 30), onPressed: () => SimpleAudioService().togglePlayPause()); }),
+                     IconButton(icon: const Icon(Icons.skip_next, color: Colors.white, size: 30), onPressed: () => SimpleAudioService().next()) 
+                  ])));
                 }))
               ]), bottomNavigationBar: Theme(data: ThemeData(splashColor: Colors.transparent, highlightColor: Colors.transparent), child: BottomNavigationBar(type: BottomNavigationBarType.fixed, currentIndex: idx, onTap: (i) => setState(() => idx = i), backgroundColor: Colors.black, selectedItemColor: Colors.white, unselectedItemColor: Colors.grey.withOpacity(0.6), selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), unselectedLabelStyle: const TextStyle(fontSize: 12), items: [BottomNavigationBarItem(icon: const Icon(Icons.home_filled), label: 'home'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.my_library_music), label: 'library'.tr()), BottomNavigationBarItem(icon: const Icon(Icons.person), label: 'profile'.tr())])));
             }
@@ -702,4 +796,4 @@ jobs:
           path: |
             ${{ env.FLUTTER_DIR }}/build/app/outputs/flutter-apk/app-release.apk
             ${{ env.FLUTTER_DIR }}/build/app/outputs/bundle/release/app-release.aab
-   
+                  
