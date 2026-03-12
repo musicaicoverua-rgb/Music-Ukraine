@@ -39,16 +39,18 @@ jobs:
           rm -rf lib/core/models
           rm -f lib/core/services/supabase_service.dart
 
-      - name: 6. Configure Android and Pubspec (Asset Shield)
+      - name: 6. Configure Android and Pubspec (Asset Shield & RAM Fix)
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
           # Створюємо всі необхідні папки
           mkdir -p android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/values
           mkdir -p assets/images assets/animations assets/icons assets/fonts
           
+          # Налаштування Android та ЗБІЛЬШЕННЯ ПАМ'ЯТІ (ФІКС ПОМИЛКИ METASPACE)
           echo "kotlin_version=1.9.0" >> android/gradle.properties
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> android/gradle.properties
           echo "flutter.compileSdkVersion=35" >> android/local.properties
           echo "flutter.minSdkVersion=24" >> android/local.properties
           
@@ -71,7 +73,7 @@ jobs:
             cp assets/images/logo.png "assets/icons/$icon"
           done
           
-          # УЛЬТИМАТИВНИЙ ЗАХИСТ АНІМАЦІЙ (включаючи confetti)
+          # УЛЬТИМАТИВНИЙ ЗАХИСТ АНІМАЦІЙ
           echo "{}" > assets/animations/loading.json
           echo "{}" > assets/animations/success.json
           echo "{}" > assets/animations/confetti.json
@@ -276,6 +278,7 @@ jobs:
             }
           }
           EOF
+
           cat << 'EOF' > lib/features/gamification/presentation/screens/daily_reward_screen.dart
           import 'package:flutter/material.dart';
           import 'dart:math';
