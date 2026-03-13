@@ -818,14 +818,12 @@ jobs:
             @override Widget build(BuildContext context) { return MaterialApp(title: 'OpenWave', debugShowCheckedModeBanner: false, localizationsDelegates: context.localizationDelegates, supportedLocales: context.supportedLocales, locale: context.locale, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF1DB954)), home: StreamBuilder<AuthState>(stream: Supabase.instance.client.auth.onAuthStateChange, builder: (c, s) { if (s.data?.session != null) return const MainScreen(); return const SimpleAuthScreen(); })); }
           }
           EOF
-      - name: 8.5 Safe Inject Premium AI & Gallery
+      - name: 8.5 Safe Inject Premium AI, Gallery & Supabase Key
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
-          # 1. ЗАВАНТАЖУЄМО ПАКЕТИ
           flutter pub add http
           flutter pub add dev:flutter_launcher_icons
           
-          # 2. БЕЗПЕЧНО НАЛАШТОВУЄМО ВАШУ ІКОНКУ
           mkdir -p assets
           cp $GITHUB_WORKSPACE/app_icon.png assets/app_icon.png || true
           echo "" >> pubspec.yaml
@@ -836,7 +834,6 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-          # 3. СТВОРЮЄМО ВІКНО З 5 VIP-КЛЮЧАМИ ТА ГАЛЕРЕЄЮ
           cat << 'EOF' > lib/features/admin/presentation/screens/ai_batch_upload_screen.dart
           import 'dart:convert';
           import 'dart:io';
@@ -865,16 +862,13 @@ jobs:
             List<BatchItem> queue = [];
             bool isSavingToDb = false;
             
-            // ==========================================
-            // ВАШІ ОСОБИСТІ VIP КЛЮЧІ (5 ШТУК):
-            // ==========================================
+            // ВАШІ ОСОБИСТІ VIP КЛЮЧІ
             final String geminiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
             final String huggingFaceKey = "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"; 
             final String togetherKey = "key_CZ19jRTaL58NPjbyfJf5G";    
             final String stabilityKey = "sk-bjVHioyaXXqmmUVhNZ71znMH4pHBsChw5jBEBKpOgv7EjC8D";   
             final String segmindKey = "SG_0927ab6dd809e18a"; 
             final String deepAiKey = "cd7e35dd-cf6f-43ad-8f8a-00d0911a95a5";  
-            // ==========================================
 
             void pickAudio() async {
               FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
@@ -890,7 +884,6 @@ jobs:
               }
             }
 
-            // РУЧНИЙ РЕЖИМ (ГАЛЕРЕЯ)
             Future<void> pickCoverFromGallery(BatchItem item) async {
                FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
                if (result != null && result.files.single.path != null) {
@@ -900,7 +893,6 @@ jobs:
                }
             }
 
-            // VIP-ГЕНЕРАТОР (5 ПРЕМІУМ СЕРВЕРІВ)
             Future<void> generateCoverWithAI(BatchItem item) async {
               if (item.title.isEmpty) { setState(() => item.errorMsg = 'Спочатку введіть назву!'); return; }
               setState(() { item.isCoverLoading = true; item.errorMsg = ''; item.progressMsg = ''; });
@@ -910,7 +902,6 @@ jobs:
               try {
                 Uint8List? finalBytes;
 
-                // 1. Спроба: Segmind (SDXL) - Супер-потужний
                 if (finalBytes == null && segmindKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Segmind AI...');
                   try {
@@ -920,10 +911,9 @@ jobs:
                       body: jsonEncode({"prompt": prompt, "samples": 1, "style": "photographic"})
                     ).timeout(const Duration(seconds: 25));
                     if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
-                  } catch (e) { debugPrint('Segmind Err: $e'); }
+                  } catch (e) {}
                 }
 
-                // 2. Спроба: Together AI (FLUX) - Надзвичайно швидкий
                 if (finalBytes == null && togetherKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Together AI (FLUX)...');
                   try {
@@ -933,10 +923,9 @@ jobs:
                       body: jsonEncode({"model": "black-forest-labs/FLUX.1-schnell", "prompt": prompt, "width": 512, "height": 512, "steps": 4, "response_format": "b64_json"})
                     ).timeout(const Duration(seconds: 15));
                     if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['data'][0]['b64_json']);
-                  } catch (e) { debugPrint('Together Err: $e'); }
+                  } catch (e) {}
                 }
 
-                // 3. Спроба: DeepAI - Супер-стабільний
                 if (finalBytes == null && deepAiKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Deep AI...');
                   try {
@@ -950,10 +939,9 @@ jobs:
                       final imgRes = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
                       if (imgRes.statusCode == 200 && imgRes.bodyBytes.length > 5000) finalBytes = imgRes.bodyBytes;
                     }
-                  } catch (e) { debugPrint('DeepAI Err: $e'); }
+                  } catch (e) {}
                 }
 
-                // 4. Спроба: Stability AI (SDXL)
                 if (finalBytes == null && stabilityKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Stability AI...');
                   try {
@@ -963,10 +951,9 @@ jobs:
                       body: jsonEncode({"text_prompts": [{"text": prompt, "weight": 1}], "cfg_scale": 7, "height": 1024, "width": 1024, "steps": 30, "samples": 1})
                     ).timeout(const Duration(seconds: 25));
                     if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['artifacts'][0]['base64']);
-                  } catch (e) { debugPrint('Stability Err: $e'); }
+                  } catch (e) {}
                 }
 
-                // 5. Спроба: Hugging Face (SDXL)
                 if (finalBytes == null && huggingFaceKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Hugging Face...');
                   try {
@@ -976,10 +963,9 @@ jobs:
                       body: jsonEncode({"inputs": prompt})
                     ).timeout(const Duration(seconds: 30));
                     if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
-                  } catch (e) { debugPrint('HF Err: $e'); }
+                  } catch (e) {}
                 }
 
-                // 6. Спроба: Google Gemini 3.0
                 if (finalBytes == null && geminiKey.isNotEmpty) {
                   setState(() => item.progressMsg = 'Gemini 3.0...');
                   try {
@@ -989,17 +975,7 @@ jobs:
                       body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})
                     ).timeout(const Duration(seconds: 20));
                     if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['predictions'][0]['bytesBase64Encoded']);
-                  } catch (e) { debugPrint('Gemini Err: $e'); }
-                }
-
-                // 7. ОСТАННІЙ РЕЗЕРВ (Без ключа, якщо закінчився баланс на всіх 6 ключах)
-                if (finalBytes == null) {
-                   setState(() => item.progressMsg = 'Резервний ШІ...');
-                   try {
-                     final spoof = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'};
-                     final res = await http.get(Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=600&height=600&nologo=true'), headers: spoof).timeout(const Duration(seconds: 20));
-                     if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
-                   } catch (e) {}
+                  } catch (e) {}
                 }
 
                 if (finalBytes != null) {
@@ -1014,7 +990,20 @@ jobs:
               setState(() { item.isCoverLoading = false; item.progressMsg = ''; });
             }
 
-            // ЗБЕРЕЖЕННЯ В БАЗУ ДАНИХ
+            Future<void> runWithRetry(Future<void> Function() action, BatchItem item, String stepName) async {
+              int maxAttempts = 3;
+              for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  await action();
+                  return; 
+                } catch (e) {
+                  if (attempt == maxAttempts) rethrow; 
+                  if(mounted) setState(() => item.progressMsg = '$stepName: Спроба ${attempt + 1}/3...');
+                  await Future.delayed(Duration(seconds: 3 * attempt)); 
+                }
+              }
+            }
+
             Future<void> saveBatchToDatabase() async {
               setState(() => isSavingToDb = true);
               
@@ -1025,23 +1014,42 @@ jobs:
                 try {
                   String? uploadedCoverUrl;
                   
+                  // ГОЛОВНИЙ ФІКС: ТІЛЬКИ ЦИФРИ В ІМЕНІ ФАЙЛУ (Без кирилиці)
+                  final safeTimestamp = DateTime.now().microsecondsSinceEpoch.toString();
+                  
                   if (item.coverBytes != null) {
-                    final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}_${item.title.replaceAll(' ', '')}.png';
-                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, item.coverBytes!, fileOptions: const FileOptions(contentType: 'image/png'));
+                    setState(() => item.progressMsg = 'Запис фото...');
+                    final imgName = 'cover_$safeTimestamp.png';
+                    
+                    await runWithRetry(() async {
+                       await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, item.coverBytes!, fileOptions: const FileOptions(contentType: 'image/png'));
+                    }, item, 'Фото');
                     uploadedCoverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
                   }
                   
+                  setState(() => item.progressMsg = 'Запис аудіо...');
                   final audioFile = File(item.audioPath!); 
                   final audioExt = item.audioPath!.split('.').last; 
-                  final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
-                  await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
+                  final audioName = 'track_$safeTimestamp.$audioExt';
+                  
+                  await runWithRetry(() async {
+                     await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
+                  }, item, 'Аудіо');
                   final audioUrl = Supabase.instance.client.storage.from('tracks').getPublicUrl(audioName);
 
-                  await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': uploadedCoverUrl});
+                  setState(() => item.progressMsg = 'Запис у БД...');
+                  await runWithRetry(() async {
+                     await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': uploadedCoverUrl});
+                  }, item, 'Таблиця');
                   
                   setState(() => item.status = 'success');
+                  
+                  // ТАНКОВИЙ ЗАВАНТАЖУВАЧ: Пауза 5 секунд для охолодження мережі телефону
+                  setState(() => item.progressMsg = 'Відпочинок мережі...');
+                  await Future.delayed(const Duration(seconds: 5));
+
                 } catch (e) { 
-                  setState(() { item.status = 'error'; item.errorMsg = "Помилка бази: $e"; }); 
+                  setState(() { item.status = 'error'; item.errorMsg = "Збій мережі. Спробуйте пізніше."; }); 
                 }
               }
               setState(() => isSavingToDb = false);
@@ -1050,7 +1058,7 @@ jobs:
             @override Widget build(BuildContext context) {
               return Scaffold(
                 backgroundColor: Colors.black,
-                appBar: AppBar(title: const Text('Завантаження (ШІ + Галерея)', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
+                appBar: AppBar(title: const Text('Студія Завантаження', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
                 body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text('Вибрано: ${queue.length}/10', style: const TextStyle(color: Colors.grey, fontSize: 16)),
@@ -1060,7 +1068,6 @@ jobs:
                   Expanded(child: queue.isEmpty ? const Center(child: Text("Оберіть до 10 файлів", style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: queue.length, itemBuilder: (c, i) {
                     final item = queue[i];
                     return Card(color: const Color(0xFF1E1E2C), margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      
                       Row(children: [
                         const Icon(Icons.audiotrack, color: Colors.grey, size: 20), const SizedBox(width: 8),
                         Expanded(child: Text(item.audioName ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
@@ -1069,13 +1076,10 @@ jobs:
                         else if (item.status == 'error') const Icon(Icons.error, color: Colors.red)
                         else IconButton(icon: const Icon(Icons.close, color: Colors.redAccent, size: 20), onPressed: () => setState(() => queue.removeAt(i)), padding: EdgeInsets.zero, constraints: const BoxConstraints())
                       ]), 
-                      
                       const SizedBox(height: 12),
-                      
                       Row(children: [
                          Container(width: 70, height: 70, decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8), image: item.coverBytes != null ? DecorationImage(image: MemoryImage(item.coverBytes!), fit: BoxFit.cover) : null), child: item.isCoverLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2)) : (item.coverBytes == null ? const Icon(Icons.image, color: Colors.grey, size: 30) : null)),
                          const SizedBox(width: 12),
-                         
                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [
                                Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF282828), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 4)), icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 16), label: const Text('ШІ Арт', style: TextStyle(fontSize: 12)), onPressed: isSavingToDb || item.isCoverLoading ? null : () => generateCoverWithAI(item))),
@@ -1086,26 +1090,78 @@ jobs:
                             if (item.errorMsg.isNotEmpty) Text(item.errorMsg, style: const TextStyle(color: Colors.redAccent, fontSize: 10))
                          ]))
                       ]),
-
                       const SizedBox(height: 12),
-                      
                       Row(children: [
                         Expanded(child: TextFormField(initialValue: item.title, onChanged: (v) => item.title = v, enabled: !isSavingToDb, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Назва', labelStyle: TextStyle(color: Colors.grey), isDense: true))), const SizedBox(width: 12),
                         Expanded(child: TextFormField(initialValue: item.artist, onChanged: (v) => item.artist = v, enabled: !isSavingToDb, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Виконавець', labelStyle: TextStyle(color: Colors.grey), isDense: true))),
                       ])
                     ])));
                   })),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isSavingToDb || queue.isEmpty ? null : saveBatchToDatabase, child: Text(isSavingToDb ? 'Збереження в базу...' : 'Зберегти вибране в базу', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
+                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isSavingToDb || queue.isEmpty ? null : saveBatchToDatabase, child: Text(isSavingToDb ? 'Збереження...' : 'Зберегти вибране в базу', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
                 ]))
               );
             }
           }
           EOF
 
-          # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
-          sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart              
+          sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
+
+          # ВШИВАЄМО ТВІЙ НОВИЙ СУПЕР-КЛЮЧ SUPABASE В MAIN.DART
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:just_audio_background/just_audio_background.dart';
+          import 'package:supabase_flutter/supabase_flutter.dart';
+          import 'package:openwave/features/auth/presentation/screens/simple_auth_screen.dart';
+          import 'package:openwave/features/home/presentation/screens/main_screen.dart';
+          import 'package:easy_localization/easy_localization.dart';
+          
+          void main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            await EasyLocalization.ensureInitialized();
+            
+            try { 
+              await Supabase.initialize(
+                url: 'https://nmowlkjoragnffkxbrzq.supabase.co', 
+                anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tb3dsa2pvcmFnbmZma3hicnpxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzA5NjI2NywiZXhwIjoyMDg4NjcyMjY3fQ.i1pu_PRIJ84gfzE0FHg2OW8ud87z1PD1oBj2dBiuQOM'
+              ); 
+            } catch (e) { debugPrint('Supabase Init Error: $e'); }
+            
+            try { await JustAudioBackground.init(androidNotificationChannelId: 'com.openwave.app.audio', androidNotificationChannelName: 'Audio playback', androidNotificationOngoing: true); } catch (e) {}
+            
+            ErrorWidget.builder = (FlutterErrorDetails d) { return MaterialApp(home: Scaffold(backgroundColor: Colors.black, body: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Критична помилка:\n${d.exceptionAsString()}', style: const TextStyle(color: Colors.redAccent)))))); };
+            
+            runApp(EasyLocalization(
+              supportedLocales: const [Locale('uk'), Locale('en')],
+              path: 'assets/translations',
+              fallbackLocale: const Locale('uk'),
+              child: const OpenWaveApp()
+            ));
+          }
+          
+          class OpenWaveApp extends StatelessWidget {
+            const OpenWaveApp({super.key});
+            @override Widget build(BuildContext context) { 
+              return MaterialApp(
+                title: 'OpenWave', 
+                debugShowCheckedModeBanner: false, 
+                localizationsDelegates: context.localizationDelegates, 
+                supportedLocales: context.supportedLocales, 
+                locale: context.locale, 
+                theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF1DB954)), 
+                home: StreamBuilder<AuthState>(
+                  stream: Supabase.instance.client.auth.onAuthStateChange, 
+                  builder: (c, s) { 
+                    if (s.data?.session != null) return const MainScreen(); 
+                    return const SimpleAuthScreen(); 
+                  }
+                )
+              ); 
+            }
+          }
+          EOF
      
+
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
