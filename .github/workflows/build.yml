@@ -860,7 +860,6 @@ jobs:
             List<BatchItem> queue = [];
             bool isProcessing = false;
             
-            // ВАШ КЛЮЧ
             final String apiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
 
             void pickAudio() async {
@@ -877,32 +876,40 @@ jobs:
               }
             }
 
-            // МАГІЯ: Подвійний генератор (Gemini + Резервний ШІ)
+            // МАГІЯ: Супер-стабільний генератор обкладинок
             Future<Uint8List?> generateAutoCover(String title, String artist) async {
-              final prompt = 'Professional album cover art for a song titled "$title" by "$artist". High-end digital art, cinematic lighting, aesthetic, 8k resolution, no text.';
+              final prompt = 'Abstract aesthetic album cover for a song "$title" by "$artist", cinematic lighting, no text.';
               
-              // 1. Спроба через ваш ключ Gemini (Imagen 3.0)
+              // Спроба 1: Pollinations AI (з маскуванням під браузер)
+              try {
+                final fallUrl = Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=500&height=500&nologo=true');
+                final fallRes = await http.get(fallUrl, headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': 'image/jpeg,image/png,*/*'
+                }).timeout(const Duration(seconds: 15));
+                
+                if (fallRes.statusCode == 200) return fallRes.bodyBytes;
+              } catch (e) { debugPrint('Pollinations fail: $e'); }
+
+              // Спроба 2: Ваш ключ Gemini
               if (apiKey.isNotEmpty) {
                 try {
                   final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=$apiKey');
-                  final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}}));
+                  final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})).timeout(const Duration(seconds: 10));
                   if (response.statusCode == 200) {
-                    final b64 = jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded'];
-                    return base64Decode(b64);
+                    return base64Decode(jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded']);
                   }
-                } catch (e) { debugPrint('Gemini fail'); }
+                } catch (e) { debugPrint('Gemini fail: $e'); }
               }
               
-              // 2. Безкоштовний резервний ШІ (Pollinations), якщо Google відмовив
+              // Спроба 3: Абсолютний резерв (Красива абстрактна геометрія по назві)
               try {
-                final fallUrl = Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=500&height=500&nologo=true');
-                final fallRes = await http.get(fallUrl);
-                if (fallRes.statusCode == 200) {
-                  return fallRes.bodyBytes;
-                }
-              } catch (e) { debugPrint('Fallback fail'); }
-              
-              return null;
+                 final backupUrl = Uri.parse('https://api.dicebear.com/8.x/shapes/png?seed=${Uri.encodeComponent(title)}&backgroundColor=0a0a0a,1a1a1a&shape1Color=1DB954,6C63FF');
+                 final backupRes = await http.get(backupUrl).timeout(const Duration(seconds: 5));
+                 if (backupRes.statusCode == 200) return backupRes.bodyBytes;
+              } catch(e) {}
+
+              return null; // Якщо немає інтернету зовсім
             }
 
             Future<void> processBatch() async {
@@ -912,13 +919,15 @@ jobs:
                 setState(() => item.status = 'loading');
                 
                 try {
-                  // 1. Отримуємо байти картинки (надійно)
+                  // 1. Отримуємо байти картинки (навіть якщо null, йдемо далі!)
                   final imgBytes = await generateAutoCover(item.title, item.artist);
-                  if (imgBytes == null) throw Exception("Обидві нейромережі недоступні. Спробуйте пізніше.");
+                  String? coverUrl;
                   
-                  final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
-                  final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
+                  if (imgBytes != null) {
+                    final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
+                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                    coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
+                  }
                   
                   // 2. Завантаження аудіо
                   final audioFile = File(item.audioPath!); 
@@ -933,7 +942,7 @@ jobs:
                   setState(() => item.status = 'success');
                 } catch (e) { 
                   setState(() => item.status = 'error'); 
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Помилка аудіо: $e'), backgroundColor: Colors.red));
                 }
               }
               setState(() => isProcessing = false);
@@ -976,7 +985,7 @@ jobs:
           # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
           sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
-            
+
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
