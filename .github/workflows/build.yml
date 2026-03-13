@@ -821,11 +821,9 @@ jobs:
       - name: 8.5 Safe Inject AI Window & App Icon
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
-          # 1. ЗАВАНТАЖУЄМО ПАКЕТИ
           flutter pub add http
           flutter pub add dev:flutter_launcher_icons
           
-          # 2. БЕЗПЕЧНО НАЛАШТОВУЄМО ВАШУ ІКОНКУ
           mkdir -p assets
           cp $GITHUB_WORKSPACE/app_icon.png assets/app_icon.png || true
           echo "" >> pubspec.yaml
@@ -836,7 +834,6 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-          # 3. СТВОРЮЄМО ОКРЕМЕ ВІКНО ДЛЯ 10 ТРЕКІВ З ПОДВІЙНИМ ШІ
           cat << 'EOF' > lib/features/admin/presentation/screens/ai_batch_upload_screen.dart
           import 'dart:convert';
           import 'dart:io';
@@ -848,7 +845,10 @@ jobs:
 
           class BatchItem {
             String title = ''; String artist = ''; String genre = 'Electronic';
-            String? audioPath; String? audioName; String status = 'idle'; 
+            String? audioPath; String? audioName; 
+            String status = 'idle'; // idle, loading, success, error
+            String progressMsg = ''; // Щоб бачити, який ШІ зараз малює
+            String errorMsg = '';
           }
 
           class AIBatchUploadScreen extends StatefulWidget {
@@ -876,58 +876,70 @@ jobs:
               }
             }
 
-            // МАГІЯ: Супер-стабільний генератор обкладинок
-            Future<Uint8List?> generateAutoCover(String title, String artist) async {
-              final prompt = 'Abstract aesthetic album cover for a song "$title" by "$artist", cinematic lighting, no text.';
+            // МАГІЯ: 4 НЕЙРОМЕРЕЖІ З ВЕЛИКИМ ТАЙМАУТОМ
+            Future<Uint8List?> generateAutoCover(BatchItem item) async {
+              final prompt = 'A beautiful aesthetic album cover for a song titled "${item.title}" by "${item.artist}", professional digital art, cinematic lighting, masterpiece, no text.';
+              final encodedPrompt = Uri.encodeComponent(prompt);
               
-              // Спроба 1: Pollinations AI (з маскуванням під браузер)
-              try {
-                final fallUrl = Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=500&height=500&nologo=true');
-                final fallRes = await http.get(fallUrl, headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Accept': 'image/jpeg,image/png,*/*'
-                }).timeout(const Duration(seconds: 15));
-                
-                if (fallRes.statusCode == 200) return fallRes.bodyBytes;
-              } catch (e) { debugPrint('Pollinations fail: $e'); }
+              final headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'image/jpeg,image/png,*/*'
+              };
 
-              // Спроба 2: Ваш ключ Gemini
+              // ШІ 1: Gemini 3.0 (через ваш ключ)
               if (apiKey.isNotEmpty) {
+                setState(() => item.progressMsg = 'ШІ 1 (Gemini) малює...');
                 try {
                   final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=$apiKey');
-                  final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})).timeout(const Duration(seconds: 10));
+                  final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})).timeout(const Duration(seconds: 25));
                   if (response.statusCode == 200) {
                     return base64Decode(jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded']);
                   }
-                } catch (e) { debugPrint('Gemini fail: $e'); }
+                } catch (e) { debugPrint('Gemini fail'); }
               }
               
-              // Спроба 3: Абсолютний резерв (Красива абстрактна геометрія по назві)
+              // ШІ 2: Flux AI (даємо цілих 90 секунд)
+              setState(() => item.progressMsg = 'ШІ 2 (Flux) малює...');
               try {
-                 final backupUrl = Uri.parse('https://api.dicebear.com/8.x/shapes/png?seed=${Uri.encodeComponent(title)}&backgroundColor=0a0a0a,1a1a1a&shape1Color=1DB954,6C63FF');
-                 final backupRes = await http.get(backupUrl).timeout(const Duration(seconds: 5));
-                 if (backupRes.statusCode == 200) return backupRes.bodyBytes;
-              } catch(e) {}
+                final fallUrl = Uri.parse('https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=flux');
+                final fallRes = await http.get(fallUrl, headers: headers).timeout(const Duration(seconds: 90));
+                if (fallRes.statusCode == 200 && fallRes.bodyBytes.isNotEmpty) return fallRes.bodyBytes;
+              } catch (e) { debugPrint('Flux fail'); }
 
-              return null; // Якщо немає інтернету зовсім
+              // ШІ 3: Turbo AI (даємо 90 секунд)
+              setState(() => item.progressMsg = 'ШІ 3 (Turbo) малює...');
+              try {
+                final turboUrl = Uri.parse('https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=turbo');
+                final turboRes = await http.get(turboUrl, headers: headers).timeout(const Duration(seconds: 90));
+                if (turboRes.statusCode == 200 && turboRes.bodyBytes.isNotEmpty) return turboRes.bodyBytes;
+              } catch (e) { debugPrint('Turbo fail'); }
+
+              // ШІ 4: Realism AI (Останній рубіж, 90 секунд)
+              setState(() => item.progressMsg = 'ШІ 4 (Realism) малює...');
+              try {
+                final realUrl = Uri.parse('https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=realism');
+                final realRes = await http.get(realUrl, headers: headers).timeout(const Duration(seconds: 90));
+                if (realRes.statusCode == 200 && realRes.bodyBytes.isNotEmpty) return realRes.bodyBytes;
+              } catch (e) { debugPrint('Realism fail'); }
+
+              throw Exception("Всі 4 нейромережі перевантажені. Спробуйте трохи пізніше.");
             }
 
             Future<void> processBatch() async {
               setState(() => isProcessing = true);
               for (var item in queue) {
                 if (item.audioPath == null || item.title.isEmpty || item.status == 'success') continue;
-                setState(() => item.status = 'loading');
+                setState(() { item.status = 'loading'; item.errorMsg = ''; });
                 
                 try {
-                  // 1. Отримуємо байти картинки (навіть якщо null, йдемо далі!)
-                  final imgBytes = await generateAutoCover(item.title, item.artist);
-                  String? coverUrl;
+                  // 1. Запуск каскаду з 4-х ШІ
+                  final imgBytes = await generateAutoCover(item);
+                  if (imgBytes == null) throw Exception("Помилка отримання байтів.");
                   
-                  if (imgBytes != null) {
-                    final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
-                    coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
-                  }
+                  setState(() => item.progressMsg = 'Завантаження в базу...');
+                  final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
+                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                  final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
                   
                   // 2. Завантаження аудіо
                   final audioFile = File(item.audioPath!); 
@@ -941,8 +953,7 @@ jobs:
                   
                   setState(() => item.status = 'success');
                 } catch (e) { 
-                  setState(() => item.status = 'error'); 
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Помилка аудіо: $e'), backgroundColor: Colors.red));
+                  setState(() { item.status = 'error'; item.errorMsg = e.toString(); }); 
                 }
               }
               setState(() => isProcessing = false);
@@ -958,34 +969,39 @@ jobs:
                     ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954)), onPressed: queue.length >= 10 || isProcessing ? null : pickAudio, icon: const Icon(Icons.folder_open, color: Colors.black), label: const Text('Обрати Треки', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))
                   ]),
                   const SizedBox(height: 16),
-                  Expanded(child: queue.isEmpty ? const Center(child: Text("Оберіть до 10 файлів для обробки ШІ", style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: queue.length, itemBuilder: (c, i) {
+                  Expanded(child: queue.isEmpty ? const Center(child: Text("Оберіть до 10 файлів", style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: queue.length, itemBuilder: (c, i) {
                     final item = queue[i];
                     return Card(color: const Color(0xFF1E1E2C), margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
                         const Icon(Icons.audiotrack, color: Colors.grey, size: 20), const SizedBox(width: 8),
                         Expanded(child: Text(item.audioName ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        if (item.status == 'loading') const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2))
+                        if (item.status == 'loading') ...[
+                          Text(item.progressMsg, style: const TextStyle(color: Color(0xFF1DB954), fontSize: 12, fontStyle: FontStyle.italic)),
+                          const SizedBox(width: 8),
+                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2))
+                        ]
                         else if (item.status == 'success') const Icon(Icons.check_circle, color: Colors.green)
                         else if (item.status == 'error') const Icon(Icons.error, color: Colors.red)
                         else IconButton(icon: const Icon(Icons.close, color: Colors.redAccent, size: 20), onPressed: () => setState(() => queue.removeAt(i)), padding: EdgeInsets.zero, constraints: const BoxConstraints())
-                      ]), const SizedBox(height: 8),
+                      ]), 
+                      if (item.errorMsg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(item.errorMsg, style: const TextStyle(color: Colors.red, fontSize: 10))),
+                      const SizedBox(height: 8),
                       Row(children: [
                         Expanded(child: TextFormField(initialValue: item.title, onChanged: (v) => item.title = v, enabled: !isProcessing, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Назва', labelStyle: TextStyle(color: Colors.grey), isDense: true))), const SizedBox(width: 12),
                         Expanded(child: TextFormField(initialValue: item.artist, onChanged: (v) => item.artist = v, enabled: !isProcessing, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Виконавець', labelStyle: TextStyle(color: Colors.grey), isDense: true))),
                       ])
                     ])));
                   })),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isProcessing || queue.isEmpty ? null : processBatch, child: Text(isProcessing ? 'ШІ Працює...' : 'Згенерувати Обкладинки та Зберегти', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
+                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isProcessing || queue.isEmpty ? null : processBatch, child: Text(isProcessing ? 'Генерація...' : 'Згенерувати Обкладинки та Зберегти', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
                 ]))
               );
             }
           }
           EOF
 
-          # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
           sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
-
+          
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
