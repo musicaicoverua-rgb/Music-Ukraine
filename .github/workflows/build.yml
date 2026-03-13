@@ -836,10 +836,11 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-          # 3. СТВОРЮЄМО ОКРЕМЕ ВІКНО ДЛЯ 10 ТРЕКІВ
+          # 3. СТВОРЮЄМО ОКРЕМЕ ВІКНО ДЛЯ 10 ТРЕКІВ З ПОДВІЙНИМ ШІ
           cat << 'EOF' > lib/features/admin/presentation/screens/ai_batch_upload_screen.dart
           import 'dart:convert';
           import 'dart:io';
+          import 'dart:typed_data';
           import 'package:flutter/material.dart';
           import 'package:file_picker/file_picker.dart';
           import 'package:supabase_flutter/supabase_flutter.dart';
@@ -859,7 +860,7 @@ jobs:
             List<BatchItem> queue = [];
             bool isProcessing = false;
             
-            // ВАШ КЛЮЧ ДОДАНО СЮДИ:
+            // ВАШ КЛЮЧ
             final String apiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
 
             void pickAudio() async {
@@ -876,42 +877,47 @@ jobs:
               }
             }
 
-            Future<String?> generateAutoCover(String title, String artist) async {
-              final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=$apiKey');
-              final prompt = 'Professional album cover art for a song titled "$title" by $artist. High-end digital art, cinematic lighting, artistic style, 8k resolution, no text.';
-              int retries = 5; int delay = 1000;
-              while (retries > 0) {
+            // МАГІЯ: Подвійний генератор (Gemini + Резервний ШІ)
+            Future<Uint8List?> generateAutoCover(String title, String artist) async {
+              final prompt = 'Professional album cover art for a song titled "$title" by "$artist". High-end digital art, cinematic lighting, aesthetic, 8k resolution, no text.';
+              
+              // 1. Спроба через ваш ключ Gemini (Imagen 3.0)
+              if (apiKey.isNotEmpty) {
                 try {
+                  final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=$apiKey');
                   final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}}));
                   if (response.statusCode == 200) {
-                    return jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded'];
-                  } else {
-                    debugPrint('API Error: ${response.statusCode} - ${response.body}');
+                    final b64 = jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded'];
+                    return base64Decode(b64);
                   }
-                } catch (e) { debugPrint('Ex: $e'); }
-                retries--; await Future.delayed(Duration(milliseconds: delay)); delay *= 2;
+                } catch (e) { debugPrint('Gemini fail'); }
               }
+              
+              // 2. Безкоштовний резервний ШІ (Pollinations), якщо Google відмовив
+              try {
+                final fallUrl = Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=500&height=500&nologo=true');
+                final fallRes = await http.get(fallUrl);
+                if (fallRes.statusCode == 200) {
+                  return fallRes.bodyBytes;
+                }
+              } catch (e) { debugPrint('Fallback fail'); }
+              
               return null;
             }
 
             Future<void> processBatch() async {
-              if (apiKey.isEmpty) {
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка: Ключ порожній!'), backgroundColor: Colors.red));
-                 return;
-              }
-
               setState(() => isProcessing = true);
               for (var item in queue) {
                 if (item.audioPath == null || item.title.isEmpty || item.status == 'success') continue;
                 setState(() => item.status = 'loading');
+                
                 try {
-                  // 1. Генерація фото
-                  final b64 = await generateAutoCover(item.title, item.artist);
-                  if (b64 == null) throw Exception("ШІ не зміг намалювати картинку.");
+                  // 1. Отримуємо байти картинки (надійно)
+                  final imgBytes = await generateAutoCover(item.title, item.artist);
+                  if (imgBytes == null) throw Exception("Обидві нейромережі недоступні. Спробуйте пізніше.");
                   
-                  final bytes = base64Decode(b64);
                   final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, bytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
                   final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
                   
                   // 2. Завантаження аудіо
@@ -923,6 +929,7 @@ jobs:
 
                   // 3. Запис у БД
                   await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': coverUrl});
+                  
                   setState(() => item.status = 'success');
                 } catch (e) { 
                   setState(() => item.status = 'error'); 
@@ -969,7 +976,6 @@ jobs:
           # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
           sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
-          
             
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
