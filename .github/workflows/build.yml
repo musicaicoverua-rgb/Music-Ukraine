@@ -818,7 +818,7 @@ jobs:
             @override Widget build(BuildContext context) { return MaterialApp(title: 'OpenWave', debugShowCheckedModeBanner: false, localizationsDelegates: context.localizationDelegates, supportedLocales: context.supportedLocales, locale: context.locale, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF1DB954)), home: StreamBuilder<AuthState>(stream: Supabase.instance.client.auth.onAuthStateChange, builder: (c, s) { if (s.data?.session != null) return const MainScreen(); return const SimpleAuthScreen(); })); }
           }
           EOF
-      - name: 8.5 Safe Inject AI Window & App Icon
+      - name: 8.5 Safe Inject Absolute Tyrant AI Cascade
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
           # 1. ЗАВАНТАЖУЄМО ПАКЕТИ
@@ -836,7 +836,7 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-          # 3. СТВОРЮЄМО ОКРЕМЕ ВІКНО З 25 ШІ-ГЕНЕРАТОРАМИ
+          # 3. СТВОРЮЄМО ОКРЕМЕ ВІКНО З 34 ШІ-ГЕНЕРАТОРАМИ
           cat << 'EOF' > lib/features/admin/presentation/screens/ai_batch_upload_screen.dart
           import 'dart:convert';
           import 'dart:io';
@@ -852,6 +852,7 @@ jobs:
             String status = 'idle'; 
             String progressMsg = ''; 
             String errorMsg = '';
+            String debugLog = ''; // Лог-шпигун для відстеження точних помилок
           }
 
           class AIBatchUploadScreen extends StatefulWidget {
@@ -862,8 +863,6 @@ jobs:
           class _AIBatchState extends State<AIBatchUploadScreen> {
             List<BatchItem> queue = [];
             bool isProcessing = false;
-            
-            final String apiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
 
             void pickAudio() async {
               FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
@@ -879,58 +878,70 @@ jobs:
               }
             }
 
-            // МАГІЯ: 25 РІВНІВ + ІДЕАЛЬНЕ МОБІЛЬНЕ МАСКУВАННЯ
+            // АБСОЛЮТНИЙ ТИРАН: 34 РІВНІ ГЕНЕРАЦІЇ ФОТО
             Future<Uint8List?> generateAutoCover(BatchItem item) async {
-              final prompt = 'Aesthetic professional album cover art for a song titled "${item.title}" by "${item.artist}", high-end digital masterpiece, highly detailed, cinematic lighting, no text, no words.';
+              final prompt = 'Aesthetic dramatic album cover for song "${item.title}" by "${item.artist}", high-end digital art, masterpiece photography, highly detailed, no text, no letters.';
               final encodedPrompt = Uri.encodeComponent(prompt);
+              item.debugLog = ''; 
               
-              // МАСКУВАННЯ ПІД SAMSUNG GALAXY S23 (Щоб API не блокувало додаток)
+              // МАСКУВАННЯ ПІД МОБІЛЬНИЙ БРАУЗЕР (щоб Cloudflare не блокував)
               final spoofHeaders = {
                 'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
                 'Accept': 'image/jpeg,image/png,image/webp,*/*',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
               };
 
-              // РІВЕНЬ 1: Gemini 3.0
-              if (apiKey.isNotEmpty) {
-                setState(() => item.progressMsg = '1/25: Gemini малює арт...');
-                try {
-                  final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=$apiKey');
-                  final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})).timeout(const Duration(seconds: 25));
-                  if (response.statusCode == 200) return base64Decode(jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded']);
-                } catch (e) { debugPrint('Gemini fail'); }
+              int step = 1;
+
+              // --- БАТАЛЬЙОН 1: HERCAI AI (7 моделей, працюють без Cloudflare) ---
+              final hercaiModels = ['v3', 'lexica', 'prodia', 'simurg', 'animefy', 'raava', 'shonin'];
+              for (String hModel in hercaiModels) {
+                 setState(() => item.progressMsg = '$step/34: Hercai ($hModel)...');
+                 try {
+                    final hUrl = Uri.parse('https://hercai.onrender.com/$hModel/text2image?prompt=$encodedPrompt');
+                    final hRes = await http.get(hUrl, headers: spoofHeaders).timeout(const Duration(seconds: 40));
+                    if (hRes.statusCode == 200) {
+                       final data = jsonDecode(hRes.body);
+                       if (data['url'] != null && data['url'].toString().isNotEmpty) {
+                          final imgRes = await http.get(Uri.parse(data['url'])).timeout(const Duration(seconds: 20));
+                          // Жорстка перевірка: файл має важити > 10 КБ (це точно фото, а не сторінка помилки)
+                          if (imgRes.statusCode == 200 && imgRes.bodyBytes.length > 10000) {
+                             return imgRes.bodyBytes;
+                          }
+                       }
+                    }
+                    item.debugLog += '[H-$hModel:${hRes.statusCode}] ';
+                 } catch (e) { item.debugLog += '[H-$hModel:Err] '; }
+                 step++;
               }
-              
-              // РІВНІ 2-25: Армія з 24 різних ШІ-моделей
-              final models = [
+
+              // --- БАТАЛЬЙОН 2: POLLINATIONS AI (27 моделей) ---
+              final pollModels = [
                 'flux', 'flux-realism', 'anydark', 'turbo', 'midjourney', 
                 'dall-e-3', 'realism', 'deliberate', 'dreamshaper', 'pixart',
                 'juggernaut', 'epicrealism', 'cyberrealistic', 'absolutereality', 
                 'revanimated', 'photon', 'majicmix', 'sdxl', 'flux-anime', 'flux-3d',
-                'turbo', 'flux', 'realism', 'anydark' 
+                'playground', 'starlightXL', 'protovision', 'lyriel', 'dreamshaper-xl',
+                'flux', 'turbo' // Повторні удари по кращих моделях
               ];
               
-              int step = 2;
-              for (String model in models) {
-                setState(() => item.progressMsg = '$step/25: ШІ $model працює...');
+              for (String pModel in pollModels) {
+                setState(() => item.progressMsg = '$step/34: Polli ($pModel)...');
                 try {
                   final seed = DateTime.now().millisecondsSinceEpoch + step;
-                  final urlString = 'https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=$model&seed=$seed';
-                  final url = Uri.parse(urlString);
+                  final pUrl = Uri.parse('https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=$pModel&seed=$seed');
                   
-                  // ПРИВ'ЯЗУЄМО НАШІ СЕКРЕТНІ ЗАГОЛОВКИ ДО КОЖНОГО ЗАПИТУ
-                  final res = await http.get(url, headers: spoofHeaders).timeout(const Duration(seconds: 45));
+                  final pRes = await http.get(pUrl, headers: spoofHeaders).timeout(const Duration(seconds: 45));
                   
-                  // ПЕРЕВІРКА: чи дійсно повернулося фото (> 5 Кілобайт)
-                  if (res.statusCode == 200 && res.bodyBytes.length > 5000) {
-                    return res.bodyBytes;
+                  // Перевіряємо, чи це дійсно фото (> 10 КБ)
+                  if (pRes.statusCode == 200 && pRes.bodyBytes.length > 10000) {
+                    return pRes.bodyBytes;
                   }
-                } catch (e) { debugPrint('$model fail: $e'); }
+                  item.debugLog += '[P-$pModel:${pRes.statusCode}] ';
+                } catch (e) { item.debugLog += '[P-$pModel:Err] '; }
                 step++;
               }
 
-              throw Exception("Жоден сервер не відповів. Перевірте з'єднання з інтернетом.");
+              throw Exception("Жоден з 34 генераторів не впорався. Лог серверів: ${item.debugLog}");
             }
 
             Future<void> processBatch() async {
@@ -940,26 +951,33 @@ jobs:
                 setState(() { item.status = 'loading'; item.errorMsg = ''; });
                 
                 try {
-                  // 1. Запуск Гідри
+                  // 1. ЗАПУСК ТИРАНА (ШІ)
                   final imgBytes = await generateAutoCover(item);
-                  if (imgBytes == null) throw Exception("Помилка генерації фото.");
+                  if (imgBytes == null) throw Exception("Помилка байтів. Лог: ${item.debugLog}");
                   
-                  setState(() => item.progressMsg = 'Зберігаємо арт у базу...');
+                  // 2. ЗАВАНТАЖЕННЯ КАРТИНКИ В SUPABASE (ТУТ МОЖЕ БУТИ ПОМИЛКА БАЗИ)
+                  setState(() => item.progressMsg = 'Запис фото в БД...');
                   final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                  try {
+                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ ФОТО! Перевір політики (RLS) бакета 'covers'. Текст: $e"); }
                   final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
                   
-                  // 2. Завантаження аудіо
-                  setState(() => item.progressMsg = 'Завантаження аудіо...');
+                  // 3. ЗАВАНТАЖЕННЯ АУДІО
+                  setState(() => item.progressMsg = 'Запис аудіо в БД...');
                   final audioFile = File(item.audioPath!); 
                   final audioExt = item.audioPath!.split('.').last; 
                   final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
-                  await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
+                  try {
+                    await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
+                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ АУДІО! Перевір політики бакета 'tracks'. Текст: $e"); }
                   final audioUrl = Supabase.instance.client.storage.from('tracks').getPublicUrl(audioName);
 
-                  // 3. Запис у БД
-                  setState(() => item.progressMsg = 'Фіналізація...');
-                  await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': coverUrl});
+                  // 4. ЗАПИС У ТАБЛИЦЮ
+                  setState(() => item.progressMsg = 'Збереження...');
+                  try {
+                    await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': coverUrl});
+                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ ТАБЛИЦЮ! Перевір політики таблиці 'tracks'. Текст: $e"); }
                   
                   setState(() => item.status = 'success');
                 } catch (e) { 
@@ -972,7 +990,7 @@ jobs:
             @override Widget build(BuildContext context) {
               return Scaffold(
                 backgroundColor: Colors.black,
-                appBar: AppBar(title: const Text('Гідра-ШІ Завантаження', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
+                appBar: AppBar(title: const Text('ШІ Тиран (Авторські)', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
                 body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text('Вибрано: ${queue.length}/10', style: const TextStyle(color: Colors.grey, fontSize: 16)),
@@ -994,7 +1012,8 @@ jobs:
                         else if (item.status == 'error') const Icon(Icons.error, color: Colors.red)
                         else IconButton(icon: const Icon(Icons.close, color: Colors.redAccent, size: 20), onPressed: () => setState(() => queue.removeAt(i)), padding: EdgeInsets.zero, constraints: const BoxConstraints())
                       ]), 
-                      if (item.errorMsg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(item.errorMsg, style: const TextStyle(color: Colors.red, fontSize: 10))),
+                      // 🔴 ДЕТАЛЬНИЙ ЛОГ ПОМИЛОК ТУТ 🔴
+                      if (item.errorMsg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(item.errorMsg, style: const TextStyle(color: Colors.redAccent, fontSize: 11)))),
                       const SizedBox(height: 8),
                       Row(children: [
                         Expanded(child: TextFormField(initialValue: item.title, onChanged: (v) => item.title = v, enabled: !isProcessing, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Назва', labelStyle: TextStyle(color: Colors.grey), isDense: true))), const SizedBox(width: 12),
@@ -1002,7 +1021,7 @@ jobs:
                       ])
                     ])));
                   })),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isProcessing || queue.isEmpty ? null : processBatch, child: Text(isProcessing ? 'Генерація (зачекайте)...' : 'Згенерувати Обкладинки та Зберегти', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
+                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isProcessing || queue.isEmpty ? null : processBatch, child: Text(isProcessing ? 'ШІ Працює...' : 'Згенерувати Обкладинки', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
                 ]))
               );
             }
@@ -1012,6 +1031,7 @@ jobs:
           # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
           sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
+
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
