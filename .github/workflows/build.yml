@@ -821,7 +821,7 @@ jobs:
       - name: 8.5 Safe Inject AI, Player & App Icon
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
-          # 1. Завантажуємо пакети
+         
           flutter pub add http
           flutter pub add dev:flutter_launcher_icons
           mkdir -p assets
@@ -829,12 +829,12 @@ jobs:
           
           cp $GITHUB_WORKSPACE/app_icon.png assets/app_icon.png
           
-          
+           (ios: false)
           cat << 'EOT' >> pubspec.yaml
           
           flutter_icons:
             android: "launcher_icon"
-            ios: true
+            ios: false
             image_path: "assets/app_icon.png"
           EOT
           flutter pub get
