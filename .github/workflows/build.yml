@@ -858,7 +858,9 @@ jobs:
           class _AIBatchState extends State<AIBatchUploadScreen> {
             List<BatchItem> queue = [];
             bool isProcessing = false;
-            final String apiKey = ""; // Ключ з середовища підставиться автоматично
+            
+            // ВАШ КЛЮЧ ДОДАНО СЮДИ:
+            final String apiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
 
             void pickAudio() async {
               FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
@@ -881,36 +883,51 @@ jobs:
               while (retries > 0) {
                 try {
                   final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}}));
-                  if (response.statusCode == 200) return jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded'];
-                } catch (e) {}
+                  if (response.statusCode == 200) {
+                    return jsonDecode(response.body)['predictions'][0]['bytesBase64Encoded'];
+                  } else {
+                    debugPrint('API Error: ${response.statusCode} - ${response.body}');
+                  }
+                } catch (e) { debugPrint('Ex: $e'); }
                 retries--; await Future.delayed(Duration(milliseconds: delay)); delay *= 2;
               }
               return null;
             }
 
             Future<void> processBatch() async {
+              if (apiKey.isEmpty) {
+                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Помилка: Ключ порожній!'), backgroundColor: Colors.red));
+                 return;
+              }
+
               setState(() => isProcessing = true);
               for (var item in queue) {
                 if (item.audioPath == null || item.title.isEmpty || item.status == 'success') continue;
                 setState(() => item.status = 'loading');
                 try {
+                  // 1. Генерація фото
                   final b64 = await generateAutoCover(item.title, item.artist);
-                  String? coverUrl;
-                  if (b64 != null) {
-                     final bytes = base64Decode(b64);
-                     final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                     await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, bytes);
-                     coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
-                  }
+                  if (b64 == null) throw Exception("ШІ не зміг намалювати картинку.");
+                  
+                  final bytes = base64Decode(b64);
+                  final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
+                  await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, bytes, fileOptions: const FileOptions(contentType: 'image/png'));
+                  final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
+                  
+                  // 2. Завантаження аудіо
                   final audioFile = File(item.audioPath!); 
                   final audioExt = item.audioPath!.split('.').last; 
                   final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
                   await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
                   final audioUrl = Supabase.instance.client.storage.from('tracks').getPublicUrl(audioName);
 
+                  // 3. Запис у БД
                   await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': coverUrl});
                   setState(() => item.status = 'success');
-                } catch (e) { setState(() => item.status = 'error'); }
+                } catch (e) { 
+                  setState(() => item.status = 'error'); 
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+                }
               }
               setState(() => isProcessing = false);
             }
@@ -952,6 +969,8 @@ jobs:
           # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
           sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart
+          
+            
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
