@@ -818,13 +818,14 @@ jobs:
             @override Widget build(BuildContext context) { return MaterialApp(title: 'OpenWave', debugShowCheckedModeBanner: false, localizationsDelegates: context.localizationDelegates, supportedLocales: context.supportedLocales, locale: context.locale, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Colors.black, primaryColor: const Color(0xFF1DB954)), home: StreamBuilder<AuthState>(stream: Supabase.instance.client.auth.onAuthStateChange, builder: (c, s) { if (s.data?.session != null) return const MainScreen(); return const SimpleAuthScreen(); })); }
           }
           EOF
-           
-      - name: 8.5 Safe Inject Absolute Tyrant AI Cascade
+      - name: 8.5 Safe Inject Premium AI & Gallery
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
+          # 1. ЗАВАНТАЖУЄМО ПАКЕТИ
           flutter pub add http
           flutter pub add dev:flutter_launcher_icons
           
+          # 2. БЕЗПЕЧНО НАЛАШТОВУЄМО ВАШУ ІКОНКУ
           mkdir -p assets
           cp $GITHUB_WORKSPACE/app_icon.png assets/app_icon.png || true
           echo "" >> pubspec.yaml
@@ -835,6 +836,7 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
+          # 3. СТВОРЮЄМО ВІКНО З 5 VIP-КЛЮЧАМИ ТА ГАЛЕРЕЄЮ
           cat << 'EOF' > lib/features/admin/presentation/screens/ai_batch_upload_screen.dart
           import 'dart:convert';
           import 'dart:io';
@@ -843,15 +845,15 @@ jobs:
           import 'package:file_picker/file_picker.dart';
           import 'package:supabase_flutter/supabase_flutter.dart';
           import 'package:http/http.dart' as http;
-          import 'dart:math';
 
           class BatchItem {
             String title = ''; String artist = ''; String genre = 'Electronic';
             String? audioPath; String? audioName; 
             String status = 'idle'; 
-            String progressMsg = ''; 
             String errorMsg = '';
-            String debugLog = ''; 
+            Uint8List? coverBytes; 
+            bool isCoverLoading = false; 
+            String progressMsg = ''; 
           }
 
           class AIBatchUploadScreen extends StatefulWidget {
@@ -861,7 +863,18 @@ jobs:
 
           class _AIBatchState extends State<AIBatchUploadScreen> {
             List<BatchItem> queue = [];
-            bool isProcessing = false;
+            bool isSavingToDb = false;
+            
+            // ==========================================
+            // ВАШІ ОСОБИСТІ VIP КЛЮЧІ (5 ШТУК):
+            // ==========================================
+            final String geminiKey = "AIzaSyD5tOGA1PvAQ9icf483mJZv5MKY5yBPmHY";
+            final String huggingFaceKey = "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"; 
+            final String togetherKey = "key_CZ19jRTaL58NPjbyfJf5G";    
+            final String stabilityKey = "sk-bjVHioyaXXqmmUVhNZ71znMH4pHBsChw5jBEBKpOgv7EjC8D";   
+            final String segmindKey = "SG_0927ab6dd809e18a"; 
+            final String deepAiKey = "cd7e35dd-cf6f-43ad-8f8a-00d0911a95a5";  
+            // ==========================================
 
             void pickAudio() async {
               FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.audio, allowMultiple: true);
@@ -877,161 +890,222 @@ jobs:
               }
             }
 
-            // СТЕЛС-ГІДРА: 30 РІВНІВ З ПІДМІНОЮ IP-АДРЕС ТА ПАУЗАМИ
-            Future<Uint8List?> generateAutoCover(BatchItem item) async {
-              // Промпт СУВОРО для фото і без тексту
-              final prompt = 'Aesthetic dramatic album cover for song "${item.title}" by "${item.artist}", high-end digital art, masterpiece photography, highly detailed, no text, no letters.';
-              final encodedPrompt = Uri.encodeComponent(prompt);
-              item.debugLog = ''; 
-              
-              final spoofHeaders = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'image/jpeg,image/png,*/*',
-              };
-
-              // СПИСОК ПРОКСІ (Для обходу помилки 429)
-              final proxies = [
-                '', // 1. Спочатку б'ємо напряму
-                'https://api.allorigins.win/raw?url=', // 2. Якщо забанили, б'ємо через сервер AllOrigins
-                'https://corsproxy.io/?url=', // 3. Якщо і там блок, б'ємо через CorsProxy
-              ];
-
-              // НАЙКРАЩІ 10 ФОТО-МОДЕЛЕЙ
-              final models = [
-                'flux', 'anydark', 'turbo', 'realism', 'midjourney', 
-                'dall-e-3', 'deliberate', 'juggernaut', 'cyberrealistic', 'epicrealism'
-              ];
-
-              int step = 1;
-              final random = Random();
-
-              for (String proxy in proxies) {
-                for (String model in models) {
-                   String proxyName = proxy.isEmpty ? "Direct" : "Proxy";
-                   setState(() => item.progressMsg = '$step/30: $model ($proxyName)...');
-                   
-                   try {
-                      // Анти-кеш
-                      final seed = random.nextInt(9999999);
-                      final targetUrl = 'https://image.pollinations.ai/prompt/$encodedPrompt?width=600&height=600&nologo=true&model=$model&seed=$seed';
-                      
-                      // Формуємо фінальне посилання (з проксі чи без)
-                      final finalUrl = proxy.isEmpty ? targetUrl : '$proxy${Uri.encodeComponent(targetUrl)}';
-                      
-                      // АНТИ-БАН (САМЕ ЦЕ ВИПРАВЛЯЄ 429): Робимо паузу 3-5 секунд перед ударом!
-                      if (step > 1) {
-                         await Future.delayed(Duration(seconds: 3 + random.nextInt(3)));
-                      }
-
-                      final res = await http.get(Uri.parse(finalUrl), headers: spoofHeaders).timeout(const Duration(seconds: 45));
-                      
-                      // Перевіряємо, чи це дійсно фото (> 12 КБ), а не сторінка помилки
-                      if (res.statusCode == 200 && res.bodyBytes.length > 12000) {
-                        return res.bodyBytes;
-                      }
-                      
-                      item.debugLog += '[${proxy.isEmpty ? "D" : "P"}-$model:${res.statusCode}] ';
-                      
-                      // Якщо ми таки зловили 429, робимо ще більшу паузу, щоб сервер "заспокоївся"
-                      if (res.statusCode == 429) {
-                         await Future.delayed(const Duration(seconds: 6));
-                      }
-
-                   } catch (e) { 
-                      item.debugLog += '[Err] '; 
-                   }
-                   step++;
-                }
-              }
-
-              throw Exception("Блокування серверів (429). Лог: ${item.debugLog}");
+            // РУЧНИЙ РЕЖИМ (ГАЛЕРЕЯ)
+            Future<void> pickCoverFromGallery(BatchItem item) async {
+               FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
+               if (result != null && result.files.single.path != null) {
+                  final file = File(result.files.single.path!);
+                  final bytes = await file.readAsBytes();
+                  setState(() { item.coverBytes = bytes; item.errorMsg = ''; });
+               }
             }
 
-            Future<void> processBatch() async {
-              setState(() => isProcessing = true);
+            // VIP-ГЕНЕРАТОР (5 ПРЕМІУМ СЕРВЕРІВ)
+            Future<void> generateCoverWithAI(BatchItem item) async {
+              if (item.title.isEmpty) { setState(() => item.errorMsg = 'Спочатку введіть назву!'); return; }
+              setState(() { item.isCoverLoading = true; item.errorMsg = ''; item.progressMsg = ''; });
+              
+              final prompt = 'Aesthetic professional album cover art for song "${item.title}" by "${item.artist}", masterpiece, highly detailed digital art, cinematic lighting, no text, no words.';
+              
+              try {
+                Uint8List? finalBytes;
+
+                // 1. Спроба: Segmind (SDXL) - Супер-потужний
+                if (finalBytes == null && segmindKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Segmind AI...');
+                  try {
+                    final res = await http.post(
+                      Uri.parse('https://api.segmind.com/v1/sdxl1.0-txt2img'),
+                      headers: {'x-api-key': segmindKey, 'Content-Type': 'application/json'},
+                      body: jsonEncode({"prompt": prompt, "samples": 1, "style": "photographic"})
+                    ).timeout(const Duration(seconds: 25));
+                    if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
+                  } catch (e) { debugPrint('Segmind Err: $e'); }
+                }
+
+                // 2. Спроба: Together AI (FLUX) - Надзвичайно швидкий
+                if (finalBytes == null && togetherKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Together AI (FLUX)...');
+                  try {
+                    final res = await http.post(
+                      Uri.parse('https://api.together.xyz/v1/images/generations'),
+                      headers: {'Authorization': 'Bearer $togetherKey', 'Content-Type': 'application/json'},
+                      body: jsonEncode({"model": "black-forest-labs/FLUX.1-schnell", "prompt": prompt, "width": 512, "height": 512, "steps": 4, "response_format": "b64_json"})
+                    ).timeout(const Duration(seconds: 15));
+                    if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['data'][0]['b64_json']);
+                  } catch (e) { debugPrint('Together Err: $e'); }
+                }
+
+                // 3. Спроба: DeepAI - Супер-стабільний
+                if (finalBytes == null && deepAiKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Deep AI...');
+                  try {
+                    final req = http.MultipartRequest('POST', Uri.parse('https://api.deepai.org/api/text2img'));
+                    req.headers['api-key'] = deepAiKey;
+                    req.fields['text'] = prompt;
+                    final streamedRes = await req.send().timeout(const Duration(seconds: 25));
+                    final res = await http.Response.fromStream(streamedRes);
+                    if (res.statusCode == 200) {
+                      final url = jsonDecode(res.body)['output_url'];
+                      final imgRes = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+                      if (imgRes.statusCode == 200 && imgRes.bodyBytes.length > 5000) finalBytes = imgRes.bodyBytes;
+                    }
+                  } catch (e) { debugPrint('DeepAI Err: $e'); }
+                }
+
+                // 4. Спроба: Stability AI (SDXL)
+                if (finalBytes == null && stabilityKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Stability AI...');
+                  try {
+                    final res = await http.post(
+                      Uri.parse('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image'),
+                      headers: {'Authorization': 'Bearer $stabilityKey', 'Content-Type': 'application/json', 'Accept': 'application/json'},
+                      body: jsonEncode({"text_prompts": [{"text": prompt, "weight": 1}], "cfg_scale": 7, "height": 1024, "width": 1024, "steps": 30, "samples": 1})
+                    ).timeout(const Duration(seconds: 25));
+                    if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['artifacts'][0]['base64']);
+                  } catch (e) { debugPrint('Stability Err: $e'); }
+                }
+
+                // 5. Спроба: Hugging Face (SDXL)
+                if (finalBytes == null && huggingFaceKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Hugging Face...');
+                  try {
+                    final res = await http.post(
+                      Uri.parse('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0'),
+                      headers: {'Authorization': 'Bearer $huggingFaceKey', 'Content-Type': 'application/json'},
+                      body: jsonEncode({"inputs": prompt})
+                    ).timeout(const Duration(seconds: 30));
+                    if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
+                  } catch (e) { debugPrint('HF Err: $e'); }
+                }
+
+                // 6. Спроба: Google Gemini 3.0
+                if (finalBytes == null && geminiKey.isNotEmpty) {
+                  setState(() => item.progressMsg = 'Gemini 3.0...');
+                  try {
+                    final res = await http.post(
+                      Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=$geminiKey'),
+                      headers: {'Content-Type': 'application/json'},
+                      body: jsonEncode({"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}})
+                    ).timeout(const Duration(seconds: 20));
+                    if (res.statusCode == 200) finalBytes = base64Decode(jsonDecode(res.body)['predictions'][0]['bytesBase64Encoded']);
+                  } catch (e) { debugPrint('Gemini Err: $e'); }
+                }
+
+                // 7. ОСТАННІЙ РЕЗЕРВ (Без ключа, якщо закінчився баланс на всіх 6 ключах)
+                if (finalBytes == null) {
+                   setState(() => item.progressMsg = 'Резервний ШІ...');
+                   try {
+                     final spoof = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'};
+                     final res = await http.get(Uri.parse('https://image.pollinations.ai/prompt/${Uri.encodeComponent(prompt)}?width=600&height=600&nologo=true'), headers: spoof).timeout(const Duration(seconds: 20));
+                     if (res.statusCode == 200 && res.bodyBytes.length > 5000) finalBytes = res.bodyBytes;
+                   } catch (e) {}
+                }
+
+                if (finalBytes != null) {
+                   setState(() => item.coverBytes = finalBytes);
+                } else {
+                   setState(() => item.errorMsg = 'Всі ШІ відмовили. Використайте галерею.');
+                }
+              } catch (e) {
+                setState(() => item.errorMsg = 'Помилка мережі. Завантажте з галереї.');
+              }
+              
+              setState(() { item.isCoverLoading = false; item.progressMsg = ''; });
+            }
+
+            // ЗБЕРЕЖЕННЯ В БАЗУ ДАНИХ
+            Future<void> saveBatchToDatabase() async {
+              setState(() => isSavingToDb = true);
+              
               for (var item in queue) {
                 if (item.audioPath == null || item.title.isEmpty || item.status == 'success') continue;
                 setState(() { item.status = 'loading'; item.errorMsg = ''; });
                 
                 try {
-                  // 1. ЗАПУСК СТЕЛС-ГІДРИ
-                  final imgBytes = await generateAutoCover(item);
-                  if (imgBytes == null) throw Exception("Помилка генерації. Лог: ${item.debugLog}");
+                  String? uploadedCoverUrl;
                   
-                  // 2. ЗАВАНТАЖЕННЯ КАРТИНКИ В SUPABASE
-                  setState(() => item.progressMsg = 'Запис фото в БД...');
-                  final imgName = 'ai_cover_${DateTime.now().millisecondsSinceEpoch}.png';
-                  try {
-                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, imgBytes, fileOptions: const FileOptions(contentType: 'image/png'));
-                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ ФОТО! Перевір політики бакета 'covers'."); }
-                  final coverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
+                  if (item.coverBytes != null) {
+                    final imgName = 'cover_${DateTime.now().millisecondsSinceEpoch}_${item.title.replaceAll(' ', '')}.png';
+                    await Supabase.instance.client.storage.from('covers').uploadBinary(imgName, item.coverBytes!, fileOptions: const FileOptions(contentType: 'image/png'));
+                    uploadedCoverUrl = Supabase.instance.client.storage.from('covers').getPublicUrl(imgName);
+                  }
                   
-                  // 3. ЗАВАНТАЖЕННЯ АУДІО
-                  setState(() => item.progressMsg = 'Запис аудіо в БД...');
                   final audioFile = File(item.audioPath!); 
                   final audioExt = item.audioPath!.split('.').last; 
                   final audioName = 'track_${DateTime.now().millisecondsSinceEpoch}.$audioExt';
-                  try {
-                    await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
-                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ АУДІО! Перевір політики бакета 'tracks'."); }
+                  await Supabase.instance.client.storage.from('tracks').upload(audioName, audioFile);
                   final audioUrl = Supabase.instance.client.storage.from('tracks').getPublicUrl(audioName);
 
-                  // 4. ЗАПИС У ТАБЛИЦЮ
-                  setState(() => item.progressMsg = 'Збереження...');
-                  try {
-                    await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': coverUrl});
-                  } catch (e) { throw Exception("SUPABASE БЛОКУЄ ТАБЛИЦЮ! Перевір політики 'tracks'."); }
+                  await Supabase.instance.client.from('tracks').insert({'title': item.title, 'artist': item.artist, 'genre': item.genre, 'audio_url': audioUrl, 'file_path': audioUrl, 'cover_url': uploadedCoverUrl});
                   
                   setState(() => item.status = 'success');
                 } catch (e) { 
-                  setState(() { item.status = 'error'; item.errorMsg = e.toString(); }); 
+                  setState(() { item.status = 'error'; item.errorMsg = "Помилка бази: $e"; }); 
                 }
               }
-              setState(() => isProcessing = false);
+              setState(() => isSavingToDb = false);
             }
 
             @override Widget build(BuildContext context) {
               return Scaffold(
                 backgroundColor: Colors.black,
-                appBar: AppBar(title: const Text('ШІ Тиран (Стелс-режим)', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
+                appBar: AppBar(title: const Text('Завантаження (ШІ + Галерея)', style: TextStyle(color: Colors.white, fontSize: 18)), backgroundColor: const Color(0xFF1E1E2C), iconTheme: const IconThemeData(color: Colors.white)),
                 body: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text('Вибрано: ${queue.length}/10', style: const TextStyle(color: Colors.grey, fontSize: 16)),
-                    ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954)), onPressed: queue.length >= 10 || isProcessing ? null : pickAudio, icon: const Icon(Icons.folder_open, color: Colors.black), label: const Text('Обрати Треки', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))
+                    ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954)), onPressed: queue.length >= 10 || isSavingToDb ? null : pickAudio, icon: const Icon(Icons.music_note, color: Colors.black), label: const Text('Обрати Аудіо', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))
                   ]),
                   const SizedBox(height: 16),
                   Expanded(child: queue.isEmpty ? const Center(child: Text("Оберіть до 10 файлів", style: TextStyle(color: Colors.grey))) : ListView.builder(itemCount: queue.length, itemBuilder: (c, i) {
                     final item = queue[i];
                     return Card(color: const Color(0xFF1E1E2C), margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      
                       Row(children: [
                         const Icon(Icons.audiotrack, color: Colors.grey, size: 20), const SizedBox(width: 8),
                         Expanded(child: Text(item.audioName ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        if (item.status == 'loading') ...[
-                          Expanded(child: Text(item.progressMsg, style: const TextStyle(color: Color(0xFF1DB954), fontSize: 11, fontStyle: FontStyle.italic), textAlign: TextAlign.right, maxLines: 1)),
-                          const SizedBox(width: 8),
-                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2))
-                        ]
+                        if (item.status == 'loading') const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2))
                         else if (item.status == 'success') const Icon(Icons.check_circle, color: Colors.green)
                         else if (item.status == 'error') const Icon(Icons.error, color: Colors.red)
                         else IconButton(icon: const Icon(Icons.close, color: Colors.redAccent, size: 20), onPressed: () => setState(() => queue.removeAt(i)), padding: EdgeInsets.zero, constraints: const BoxConstraints())
                       ]), 
-                      if (item.errorMsg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(item.errorMsg, style: const TextStyle(color: Colors.redAccent, fontSize: 11)))),
-                      const SizedBox(height: 8),
+                      
+                      const SizedBox(height: 12),
+                      
                       Row(children: [
-                        Expanded(child: TextFormField(initialValue: item.title, onChanged: (v) => item.title = v, enabled: !isProcessing, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Назва', labelStyle: TextStyle(color: Colors.grey), isDense: true))), const SizedBox(width: 12),
-                        Expanded(child: TextFormField(initialValue: item.artist, onChanged: (v) => item.artist = v, enabled: !isProcessing, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Виконавець', labelStyle: TextStyle(color: Colors.grey), isDense: true))),
+                         Container(width: 70, height: 70, decoration: BoxDecoration(color: const Color(0xFF121212), borderRadius: BorderRadius.circular(8), image: item.coverBytes != null ? DecorationImage(image: MemoryImage(item.coverBytes!), fit: BoxFit.cover) : null), child: item.isCoverLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFF1DB954), strokeWidth: 2)) : (item.coverBytes == null ? const Icon(Icons.image, color: Colors.grey, size: 30) : null)),
+                         const SizedBox(width: 12),
+                         
+                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                               Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF282828), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 4)), icon: const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 16), label: const Text('ШІ Арт', style: TextStyle(fontSize: 12)), onPressed: isSavingToDb || item.isCoverLoading ? null : () => generateCoverWithAI(item))),
+                               const SizedBox(width: 8),
+                               Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF282828), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 4)), icon: const Icon(Icons.photo_library, color: Colors.blueAccent, size: 16), label: const Text('Галерея', style: TextStyle(fontSize: 12)), onPressed: isSavingToDb || item.isCoverLoading ? null : () => pickCoverFromGallery(item))),
+                            ]),
+                            if (item.progressMsg.isNotEmpty) Text(item.progressMsg, style: const TextStyle(color: Color(0xFF1DB954), fontSize: 10, fontStyle: FontStyle.italic)),
+                            if (item.errorMsg.isNotEmpty) Text(item.errorMsg, style: const TextStyle(color: Colors.redAccent, fontSize: 10))
+                         ]))
+                      ]),
+
+                      const SizedBox(height: 12),
+                      
+                      Row(children: [
+                        Expanded(child: TextFormField(initialValue: item.title, onChanged: (v) => item.title = v, enabled: !isSavingToDb, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Назва', labelStyle: TextStyle(color: Colors.grey), isDense: true))), const SizedBox(width: 12),
+                        Expanded(child: TextFormField(initialValue: item.artist, onChanged: (v) => item.artist = v, enabled: !isSavingToDb, style: const TextStyle(color: Colors.white, fontSize: 14), decoration: const InputDecoration(labelText: 'Виконавець', labelStyle: TextStyle(color: Colors.grey), isDense: true))),
                       ])
                     ])));
                   })),
-                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isProcessing || queue.isEmpty ? null : processBatch, child: Text(isProcessing ? 'ШІ малює обкладинки...' : 'Згенерувати Обкладинки', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
+                  SizedBox(width: double.infinity, height: 50, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1DB954), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: isSavingToDb || queue.isEmpty ? null : saveBatchToDatabase, child: Text(isSavingToDb ? 'Збереження в базу...' : 'Зберегти вибране в базу', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))))
                 ]))
               );
             }
           }
           EOF
 
+          # 4. БЕЗПЕЧНО ДОДАЄМО КНОПКУ В ІСНУЮЧУ АДМІНКУ
           sed -i '1s/^/import "package:openwave\/features\/admin\/presentation\/screens\/ai_batch_upload_screen.dart";\n/' lib/features/admin/presentation/screens/admin_screen.dart
-          sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart           
+          sed -i 's/AppBar(/AppBar(actions: [IconButton(icon: const Icon(Icons.auto_awesome, color: Color(0xFF1DB954), size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIBatchUploadScreen())))], /' lib/features/admin/presentation/screens/admin_screen.dart              
+     
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
         run: flutter pub get
