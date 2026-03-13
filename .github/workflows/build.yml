@@ -821,13 +821,15 @@ jobs:
       - name: 8.5 Safe Inject AI, Player & App Icon
         working-directory: ${{ env.FLUTTER_DIR }}
         run: |
-          # 1. Завантажуємо пакети та вашу іконку
+          # 1. Завантажуємо пакети
           flutter pub add http
           flutter pub add dev:flutter_launcher_icons
           mkdir -p assets
-          curl -o assets/app_icon.png "https://files.oaiusercontent.com/file-mS2XvP4i9E4Y4V4V4V4V4V4V" || true
           
-          # 2. Встановлюємо іконку на телефон
+          
+          cp $GITHUB_WORKSPACE/app_icon.png assets/app_icon.png
+          
+          
           cat << 'EOT' >> pubspec.yaml
           
           flutter_icons:
@@ -838,7 +840,7 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-          # 3. ДОПИСУЄМО логіку Плеєра та СПРАВЖНЬОГО ШІ-генератора
+          
           cat << 'EOF' >> lib/main.dart
           
           // --- БЕЗПЕЧНО ДОДАНИЙ КОД (ПЛЕЄР ТА ШІ) ---
@@ -988,10 +990,11 @@ jobs:
           }
           EOF
           
-          # 4. Вмонтовуємо все це у ваш існуючий інтерфейс без видалення вашого коду!
+          
           sed -i '1s/^/import "package:http\/http.dart" as http;\nimport "dart:convert";\n/' lib/main.dart
           sed -i 's/return const MainScreen();/return Stack(children: [const MainScreen(), const OWPlayerOverlay(), if (s.data?.session?.user.email == "andriimykolyshyn@gmail.com") Positioned(top: 80, right: 16, child: Material(color: Colors.transparent, child: FloatingActionButton(heroTag: "ai_btn", backgroundColor: Colors.green, onPressed: () => Navigator.of(c).push(MaterialPageRoute(builder: (_) => const OWAdminBatchScreen())), child: const Icon(Icons.auto_awesome, color: Colors.white))))]);/' lib/main.dart
           
+
 
       - name: 9. Get Flutter Dependencies
         working-directory: ${{ env.FLUTTER_DIR }}
